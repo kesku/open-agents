@@ -1,10 +1,12 @@
 import type { LanguageModel } from "ai";
-import { gateway, stepCountIs, ToolLoopAgent } from "ai";
+import { stepCountIs, ToolLoopAgent } from "ai";
 import { z } from "zod";
+import { gateway } from "../models";
 import { bashTool } from "../tools/bash";
 import { globTool } from "../tools/glob";
 import { grepTool } from "../tools/grep";
 import { readFileTool } from "../tools/read";
+import { DEFAULT_FAST_MODEL_ID } from "../model-defaults";
 import type { SandboxExecutionContext } from "../types";
 import {
   SUBAGENT_NO_QUESTIONS_RULES,
@@ -74,7 +76,7 @@ const callOptionsSchema = z.object({
 export type ExplorerCallOptions = z.infer<typeof callOptionsSchema>;
 
 export const explorerSubagent = new ToolLoopAgent({
-  model: gateway("anthropic/claude-haiku-4.5"),
+  model: gateway(DEFAULT_FAST_MODEL_ID),
   instructions: EXPLORER_SYSTEM_PROMPT,
   tools: {
     read: readFileTool(),

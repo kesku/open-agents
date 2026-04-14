@@ -126,6 +126,7 @@ mock.module("@open-harness/agent", () => ({
     return [];
   },
   gateway: () => "mock-model",
+  getConfiguredProviderIds: () => ["openai"],
 }));
 
 mock.module("@open-harness/sandbox", () => ({

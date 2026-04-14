@@ -108,6 +108,8 @@ mock.module("@/lib/vercel/projects", () => ({
 mock.module("@/lib/db/sessions", () => ({
   getChatsBySessionId: async () => [],
   getSessionById: async () => sessionRecord,
+  normalizeLegacySandboxState: (state: unknown) =>
+    typeof state === "object" && state !== null ? state : null,
   updateSession: async (sessionId: string, patch: Record<string, unknown>) => {
     updateCalls.push({ sessionId, patch });
     return {

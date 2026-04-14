@@ -1,12 +1,7 @@
-import { gateway } from "ai";
-
-export const DEFAULT_MODEL_ID = "anthropic/claude-opus-4.6";
+import { filterDisabledModels } from "./model-availability";
+export { DEFAULT_FAST_MODEL_ID, DEFAULT_MODEL_ID } from "./model-defaults";
 export const DEFAULT_CONTEXT_LIMIT = 200_000;
 const TOKENS_PER_MILLION = 1_000_000;
-
-type GatewayAvailableModel = Awaited<
-  ReturnType<typeof gateway.getAvailableModels>
->["models"][number];
 
 export interface AvailableModelCostTier {
   input?: number;
@@ -18,10 +13,118 @@ export interface AvailableModelCost extends AvailableModelCostTier {
   context_over_200k?: AvailableModelCostTier;
 }
 
-export type AvailableModel = GatewayAvailableModel & {
+export interface AvailableModel {
+  id: string;
+  modelType: "language";
+  name: string;
+  provider: "openai" | "anthropic";
+  description?: string;
   context_window?: number;
   cost?: AvailableModelCost;
+}
+
+const AVAILABLE_LANGUAGE_MODELS_BY_PROVIDER: Record<
+  AvailableModel["provider"],
+  AvailableModel[]
+> = {
+  openai: [
+    {
+      id: "openai/gpt-5.4",
+      name: "GPT-5.4",
+      provider: "openai",
+      modelType: "language",
+      description: "OpenAI default frontier model",
+    },
+    {
+      id: "openai/gpt-5.4-mini",
+      name: "GPT-5.4 Mini",
+      provider: "openai",
+      modelType: "language",
+      description: "Fast OpenAI model for helper flows",
+    },
+    {
+      id: "openai/gpt-5.4-nano",
+      name: "GPT-5.4 Nano",
+      provider: "openai",
+      modelType: "language",
+      description: "Lowest-cost OpenAI option",
+    },
+    {
+      id: "openai/gpt-5",
+      name: "GPT-5",
+      provider: "openai",
+      modelType: "language",
+      description: "General OpenAI GPT-5 model",
+    },
+  ],
+  anthropic: [
+    {
+      id: "anthropic/claude-opus-4.6",
+      name: "Claude Opus 4.6",
+      provider: "anthropic",
+      modelType: "language",
+      description: "Anthropic high-capability model",
+    },
+    {
+      id: "anthropic/claude-sonnet-4.6",
+      name: "Claude Sonnet 4.6",
+      provider: "anthropic",
+      modelType: "language",
+      description: "Balanced Anthropic model",
+    },
+    {
+      id: "anthropic/claude-haiku-4.5",
+      name: "Claude Haiku 4.5",
+      provider: "anthropic",
+      modelType: "language",
+      description: "Fast Anthropic model",
+    },
+  ],
 };
+
+function hasConfiguredEnv(name: string): boolean {
+  const value = process.env[name];
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+function getConfiguredProviderIds(): AvailableModel["provider"][] {
+  const configuredProviders: AvailableModel["provider"][] = [];
+
+  if (
+    hasConfiguredEnv("OPENAI_API_KEY") ||
+    hasConfiguredEnv("OPENAI_BASE_URL") ||
+    hasConfiguredEnv("NEXT_PUBLIC_OPENAI_BASE_URL")
+  ) {
+    configuredProviders.push("openai");
+  }
+
+  if (
+    hasConfiguredEnv("ANTHROPIC_API_KEY") ||
+    hasConfiguredEnv("ANTHROPIC_AUTH_TOKEN") ||
+    hasConfiguredEnv("ANTHROPIC_BASE_URL")
+  ) {
+    configuredProviders.push("anthropic");
+  }
+
+  return configuredProviders;
+}
+
+export function getAvailableLanguageModelsFromCatalog(): AvailableModel[] {
+  const configuredProviders = getConfiguredProviderIds();
+  const providerIds =
+    configuredProviders.length > 0
+      ? configuredProviders
+      : (["openai"] as AvailableModel["provider"][]);
+
+  return filterDisabledModels(
+    providerIds.flatMap(
+      (providerId) =>
+        AVAILABLE_LANGUAGE_MODELS_BY_PROVIDER[
+          providerId as AvailableModel["provider"]
+        ] ?? [],
+    ),
+  );
+}
 
 export function getModelDisplayName(model: AvailableModel): string {
   return model.name ?? model.id;

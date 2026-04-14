@@ -1,17 +1,12 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
-interface MockGatewayModel extends Record<string, unknown> {
-  id: string;
-  modelType: "language" | "image";
-  context_window?: number;
-}
-
-const gatewayModels: MockGatewayModel[] = [];
 const requestedUrls: string[] = [];
 
 let modelsDevApiData: unknown = {};
 
 const originalFetch = globalThis.fetch;
+const originalOpenAiApiKey = process.env.OPENAI_API_KEY;
+const originalAnthropicApiKey = process.env.ANTHROPIC_API_KEY;
 
 function getRequestUrl(input: RequestInfo | URL): string {
   if (typeof input === "string") {
@@ -23,25 +18,31 @@ function getRequestUrl(input: RequestInfo | URL): string {
   return input.url;
 }
 
-mock.module("ai", () => ({
-  gateway: {
-    getAvailableModels: async () => ({ models: gatewayModels }),
-  },
-}));
-
 mock.module("server-only", () => ({}));
 
 const routeModulePromise = import("./route");
 
 afterEach(() => {
   globalThis.fetch = originalFetch;
+  if (originalOpenAiApiKey === undefined) {
+    delete process.env.OPENAI_API_KEY;
+  } else {
+    process.env.OPENAI_API_KEY = originalOpenAiApiKey;
+  }
+
+  if (originalAnthropicApiKey === undefined) {
+    delete process.env.ANTHROPIC_API_KEY;
+  } else {
+    process.env.ANTHROPIC_API_KEY = originalAnthropicApiKey;
+  }
 });
 
 describe("/api/models context window enrichment", () => {
   beforeEach(() => {
-    gatewayModels.length = 0;
     requestedUrls.length = 0;
     modelsDevApiData = {};
+    process.env.OPENAI_API_KEY = "test-openai-key";
+    process.env.ANTHROPIC_API_KEY = "test-anthropic-key";
 
     globalThis.fetch = mock((input: RequestInfo | URL, _init?: RequestInit) => {
       requestedUrls.push(getRequestUrl(input));
@@ -54,35 +55,15 @@ describe("/api/models context window enrichment", () => {
     }) as unknown as typeof fetch;
   });
 
-  test("overrides gateway context windows from models.dev", async () => {
-    gatewayModels.push(
-      {
-        id: "openai/gpt-5.3-codex",
-        modelType: "language",
-        context_window: 200_000,
-      },
-      {
-        id: "anthropic/claude-opus-4.6",
-        modelType: "language",
-        context_window: 200_000,
-      },
-      {
-        id: "openai/gpt-4o-mini",
-        modelType: "language",
-        context_window: 128_000,
-      },
-      {
-        id: "openai/image-gen",
-        modelType: "image",
-        context_window: 200_000,
-      },
-    );
-
+  test("overrides catalog context windows from models.dev", async () => {
     modelsDevApiData = {
       openai: {
         models: {
-          "gpt-5.3-codex": {
+          "gpt-5.4": {
             limit: { context: 400_000 },
+          },
+          "gpt-5.4-mini": {
+            limit: { context: 128_000 },
           },
         },
       },
@@ -90,6 +71,9 @@ describe("/api/models context window enrichment", () => {
         models: {
           "claude-opus-4.6": {
             limit: { context: 1_000_000 },
+          },
+          "claude-sonnet-4.6": {
+            limit: { context: 400_000 },
           },
         },
       },
@@ -107,27 +91,22 @@ describe("/api/models context window enrichment", () => {
       body.models.map((model) => [model.id, model.context_window]),
     );
 
-    expect(contextById.get("openai/gpt-5.3-codex")).toBe(400_000);
+    expect(contextById.get("openai/gpt-5.4")).toBe(400_000);
+    expect(contextById.get("openai/gpt-5.4-mini")).toBe(128_000);
     expect(contextById.get("anthropic/claude-opus-4.6")).toBe(1_000_000);
-    expect(contextById.get("openai/gpt-4o-mini")).toBe(128_000);
-    expect(contextById.has("openai/image-gen")).toBe(false);
+    expect(contextById.get("anthropic/claude-sonnet-4.6")).toBe(400_000);
     expect(requestedUrls).toContain("https://models.dev/api.json");
   });
 
-  test("keeps gateway context window when models.dev only has related ids", async () => {
-    gatewayModels.push({
-      id: "openai/gpt-5.3-codex-2026-02-15",
-      modelType: "language",
-      context_window: 200_000,
-    });
-
+  test("keeps catalog context window unchanged when models.dev only has related ids", async () => {
+    delete process.env.ANTHROPIC_API_KEY;
     modelsDevApiData = {
       openai: {
         models: {
           "gpt-5": {
             limit: { context: 272_000 },
           },
-          "gpt-5.3-codex": {
+          "gpt-5.4-preview": {
             limit: { context: 400_000 },
           },
         },
@@ -142,8 +121,17 @@ describe("/api/models context window enrichment", () => {
     const body = (await response.json()) as {
       models: Array<{ id: string; context_window?: number }>;
     };
+    const contextById = new Map(
+      body.models.map((model) => [model.id, model.context_window]),
+    );
 
-    expect(body.models).toHaveLength(1);
-    expect(body.models[0]?.context_window).toBe(200_000);
+    expect(body.models.map((model) => model.id)).toEqual([
+      "openai/gpt-5.4",
+      "openai/gpt-5.4-mini",
+      "openai/gpt-5.4-nano",
+      "openai/gpt-5",
+    ]);
+    expect(contextById.get("openai/gpt-5.4")).toBeUndefined();
+    expect(contextById.get("openai/gpt-5")).toBe(272_000);
   });
 });

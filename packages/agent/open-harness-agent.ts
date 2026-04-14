@@ -23,6 +23,7 @@ import {
   webFetchTool,
   writeFileTool,
 } from "./tools";
+import { DEFAULT_MAIN_MODEL_ID } from "./model-defaults";
 
 export interface AgentModelSelection {
   id: GatewayModelId;
@@ -48,7 +49,7 @@ const callOptionsSchema = z.object({
 
 export type OpenHarnessAgentCallOptions = z.infer<typeof callOptionsSchema>;
 
-export const defaultModelLabel = "anthropic/claude-opus-4.6" as const;
+export const defaultModelLabel = DEFAULT_MAIN_MODEL_ID;
 export const defaultModel = gateway(defaultModelLabel);
 
 function normalizeAgentModelSelection(

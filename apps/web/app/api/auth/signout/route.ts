@@ -2,10 +2,17 @@ import { type NextRequest } from "next/server";
 import { cookies } from "next/headers";
 import { getServerSession } from "@/lib/session/get-server-session";
 import { SESSION_COOKIE_NAME } from "@/lib/session/constants";
+import { isLocalAuthEnabled } from "@/lib/session/local-auth";
 import { revokeVercelToken } from "@/lib/vercel/oauth";
 import { getUserVercelToken } from "@/lib/vercel/token";
 
 export async function POST(req: NextRequest): Promise<Response> {
+  if (isLocalAuthEnabled()) {
+    const store = await cookies();
+    store.delete(SESSION_COOKIE_NAME);
+    return Response.redirect(new URL("/", req.url));
+  }
+
   const session = await getServerSession();
 
   if (session?.user?.id) {

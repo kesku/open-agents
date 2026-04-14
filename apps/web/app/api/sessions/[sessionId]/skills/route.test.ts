@@ -151,6 +151,7 @@ function registerRouteMocks() {
       discoverCalls.push({ skillDirs });
       return discoveredSkills;
     },
+    getConfiguredProviderIds: () => ["openai"],
   }));
 }
 

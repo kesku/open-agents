@@ -1,8 +1,10 @@
 import type { Sandbox } from "@open-harness/sandbox";
-import { gateway, generateText } from "ai";
+import { gateway } from "@open-harness/agent";
+import { generateText } from "ai";
 import { getGitHubAccount } from "@/lib/db/accounts";
 import { getAppCoAuthorTrailer } from "@/lib/github/app-auth";
 import { createRepository } from "@/lib/github/client";
+import { DEFAULT_FAST_MODEL_ID } from "@/lib/models";
 
 // Escape shell metacharacters to prevent command injection
 const escapeShellArg = (arg: string) => `'${arg.replace(/'/g, "'\\''")}'`;
@@ -197,7 +199,7 @@ export async function runCreateRepoWorkflow({
 
   try {
     const commitMsgResult = await generateText({
-      model: gateway("anthropic/claude-haiku-4.5"),
+      model: gateway(DEFAULT_FAST_MODEL_ID),
       prompt: `Generate a concise git commit message for an initial commit of a new project. Use conventional commit format. One line only, max 72 characters.
 
 Session context: ${sanitizedSessionTitle}

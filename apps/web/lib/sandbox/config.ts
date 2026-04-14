@@ -2,6 +2,7 @@
  * Sandbox timeout configuration.
  * All timeout values are in milliseconds.
  */
+import { getConfiguredSandboxBackend } from "./backend";
 
 /** Default timeout for new cloud sandboxes (5 hours) */
 export const DEFAULT_SANDBOX_TIMEOUT_MS = 5 * 60 * 60 * 1000;
@@ -34,7 +35,10 @@ export const DEFAULT_SANDBOX_PORTS = [3000, 5173, 4321, 8000];
 export const CODE_SERVER_PORT = 8000;
 
 /** Default working directory for sandboxes, used for path display */
-export const DEFAULT_WORKING_DIRECTORY = "/vercel/sandbox";
+export const DEFAULT_WORKING_DIRECTORY =
+  getConfiguredSandboxBackend() === "proxmox-lxc"
+    ? "/workspace"
+    : "/vercel/sandbox";
 
 /**
  * Base snapshot for fresh cloud sandboxes.
@@ -42,8 +46,10 @@ export const DEFAULT_WORKING_DIRECTORY = "/vercel/sandbox";
  * - Previous snapshot includes: bun + jq + agent-browser + chromium
  */
 export const DEFAULT_SANDBOX_BASE_SNAPSHOT_ID =
-  process.env.VERCEL_SANDBOX_BASE_SNAPSHOT_ID ??
-  // Previous snapshot (bun + jq): "snap_MQ0NqdLL5qEXiYusgWL3K0yaMmql"
-  // Previous snapshot (bun + jq + agent-browser + chromium): "snap_C8tUFhwRXZky4MaFvTuwO7DH66wx"
-  // Current snapshot (bun + jq + agent-browser + chromium + code-server):
-  "snap_EjsphVxi07bFKrfojljJdIS41KHT";
+  getConfiguredSandboxBackend() === "vercel"
+    ? (process.env.VERCEL_SANDBOX_BASE_SNAPSHOT_ID ??
+      // Previous snapshot (bun + jq): "snap_MQ0NqdLL5qEXiYusgWL3K0yaMmql"
+      // Previous snapshot (bun + jq + agent-browser + chromium): "snap_C8tUFhwRXZky4MaFvTuwO7DH66wx"
+      // Current snapshot (bun + jq + agent-browser + chromium + code-server):
+      "snap_EjsphVxi07bFKrfojljJdIS41KHT")
+    : undefined;

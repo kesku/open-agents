@@ -16,6 +16,7 @@ import {
   isValidGitHubRepoOwner,
 } from "@/lib/github/repo-identifiers";
 import { getRandomCityName } from "@/lib/random-city";
+import { isSupportedSandboxType } from "@/lib/sandbox/backend";
 import { getServerSession } from "@/lib/session/get-server-session";
 import {
   isManagedTemplateTrialUser,
@@ -36,7 +37,7 @@ interface CreateSessionRequest {
   branch?: string;
   cloneUrl?: string;
   isNewBranch?: boolean;
-  sandboxType?: "vercel";
+  sandboxType?: "vercel" | "proxmox-lxc";
   autoCommitPush?: boolean;
   autoCreatePr?: boolean;
   vercelProject?: VercelProjectSelection | null;
@@ -188,7 +189,7 @@ export async function POST(req: Request) {
     return Response.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  if (body.sandboxType && body.sandboxType !== "vercel") {
+  if (body.sandboxType && !isSupportedSandboxType(body.sandboxType)) {
     return Response.json({ error: "Invalid sandbox type" }, { status: 400 });
   }
 

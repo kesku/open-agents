@@ -1,10 +1,11 @@
 import type { Sandbox } from "@open-harness/sandbox";
-import { generateText } from "ai";
 import { gateway } from "@open-harness/agent";
+import { generateText } from "ai";
 import { getGitHubAccount } from "@/lib/db/accounts";
 import { buildGitHubAuthRemoteUrl } from "@/lib/github/repo-identifiers";
 import { getAppCoAuthorTrailer } from "@/lib/github/app-auth";
 import { getUserGitHubToken } from "@/lib/github/user-token";
+import { DEFAULT_FAST_MODEL_ID } from "@/lib/models";
 
 export interface AutoCommitParams {
   sandbox: Sandbox;
@@ -161,7 +162,7 @@ async function generateCommitMessage(
     }
 
     const result = await generateText({
-      model: gateway("anthropic/claude-haiku-4.5"),
+      model: gateway(DEFAULT_FAST_MODEL_ID),
       prompt: `Generate a concise git commit message for these changes. Use conventional commit format (e.g., "feat:", "fix:", "refactor:"). One line only, max 72 characters.
 
 Session context: ${sessionTitle}

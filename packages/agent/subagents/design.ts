@@ -1,11 +1,13 @@
 import type { LanguageModel } from "ai";
-import { gateway, stepCountIs, ToolLoopAgent } from "ai";
+import { stepCountIs, ToolLoopAgent } from "ai";
 import { z } from "zod";
+import { gateway } from "../models";
 import { bashTool } from "../tools/bash";
 import { globTool } from "../tools/glob";
 import { grepTool } from "../tools/grep";
 import { readFileTool } from "../tools/read";
 import { editFileTool, writeFileTool } from "../tools/write";
+import { DEFAULT_MAIN_MODEL_ID } from "../model-defaults";
 import type { SandboxExecutionContext } from "../types";
 import {
   SUBAGENT_BASH_RULES,
@@ -89,7 +91,7 @@ const callOptionsSchema = z.object({
 export type DesignCallOptions = z.infer<typeof callOptionsSchema>;
 
 export const designSubagent = new ToolLoopAgent({
-  model: gateway("anthropic/claude-opus-4.6"),
+  model: gateway(DEFAULT_MAIN_MODEL_ID),
   instructions: DESIGN_SYSTEM_PROMPT,
   tools: {
     read: readFileTool(),

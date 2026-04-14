@@ -9,10 +9,18 @@ import { updateSession } from "@/lib/db/sessions";
 import { parseGitHubUrl } from "@/lib/github/client";
 import { getUserGitHubToken } from "@/lib/github/user-token";
 import {
+  getConfiguredSandboxBackend,
+  isSupportedSandboxType,
+} from "@/lib/sandbox/backend";
+import {
   DEFAULT_SANDBOX_BASE_SNAPSHOT_ID,
   DEFAULT_SANDBOX_PORTS,
   DEFAULT_SANDBOX_TIMEOUT_MS,
 } from "@/lib/sandbox/config";
+import {
+  ProxmoxPoolCapacityError,
+  reserveProxmoxLease,
+} from "@/lib/sandbox/proxmox-pool";
 import {
   buildActiveLifecycleUpdate,
   getNextLifecycleVersion,
@@ -38,7 +46,7 @@ interface CreateSandboxRequest {
   branch?: string;
   isNewBranch?: boolean;
   sessionId?: string;
-  sandboxType?: "vercel";
+  sandboxType?: "vercel" | "proxmox-lxc";
 }
 
 // async function syncVercelProjectEnvVarsToSandbox(params: {
@@ -110,11 +118,12 @@ export async function POST(req: Request) {
     return Response.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  if (body.sandboxType && body.sandboxType !== "vercel") {
+  if (body.sandboxType && !isSupportedSandboxType(body.sandboxType)) {
     return Response.json({ error: "Invalid sandbox type" }, { status: 400 });
   }
 
   const { repoUrl, branch = "main", isNewBranch = false, sessionId } = body;
+  const sandboxType = body.sandboxType ?? getConfiguredSandboxBackend();
 
   // Get session for auth
   const session = await getServerSession();
@@ -183,92 +192,137 @@ export async function POST(req: Request) {
       }
     : undefined;
 
-  const sandbox = await connectSandbox({
-    state: {
-      type: "vercel",
-      ...(sandboxName ? { sandboxName } : {}),
-      source,
-    },
-    options: {
-      githubToken: githubToken ?? undefined,
-      gitUser,
-      timeout: DEFAULT_SANDBOX_TIMEOUT_MS,
-      ports: DEFAULT_SANDBOX_PORTS,
-      baseSnapshotId: DEFAULT_SANDBOX_BASE_SNAPSHOT_ID,
-      persistent: !!sandboxName,
-      resume: !!sandboxName,
-      createIfMissing: !!sandboxName,
-    },
-  });
+  let reservedState: SandboxState | null = null;
 
-  if (sessionId && sandbox.getState) {
-    const nextState = sandbox.getState() as SandboxState;
-    await updateSession(sessionId, {
-      sandboxState: nextState,
-      snapshotUrl: null,
-      snapshotCreatedAt: null,
-      lifecycleVersion: getNextLifecycleVersion(
-        sessionRecord?.lifecycleVersion,
-      ),
-      ...buildActiveLifecycleUpdate(nextState),
-    });
+  try {
+    reservedState =
+      sandboxType === "proxmox-lxc"
+        ? sessionId
+          ? await reserveProxmoxLease(sessionId, source)
+          : null
+        : ({
+            type: "vercel",
+            ...(sandboxName ? { sandboxName } : {}),
+            source,
+          } satisfies SandboxState);
 
-    if (sessionRecord) {
-      // TODO: Re-enable this once we have a solid exfiltration defense strategy.
-      // try {
-      //   await syncVercelProjectEnvVarsToSandbox({
-      //     userId: session.user.id,
-      //     sessionRecord,
-      //     sandbox,
-      //   });
-      // } catch (error) {
-      //   console.error(
-      //     `Failed to sync Vercel env vars for session ${sessionRecord.id}:`,
-      //     error,
-      //   );
-      // }
-
-      try {
-        await syncVercelCliAuthForSandbox({
-          userId: session.user.id,
-          sessionRecord,
-          sandbox,
-        });
-      } catch (error) {
-        console.error(
-          `Failed to prepare Vercel CLI auth for session ${sessionRecord.id}:`,
-          error,
-        );
-      }
-
-      try {
-        await installSessionGlobalSkills({
-          sessionRecord,
-          sandbox,
-        });
-      } catch (error) {
-        console.error(
-          `Failed to install global skills for session ${sessionRecord.id}:`,
-          error,
-        );
-      }
+    if (sandboxType === "proxmox-lxc" && !reservedState) {
+      return Response.json(
+        { error: "Local Proxmox sandboxes require a session id" },
+        { status: 400 },
+      );
     }
 
-    kickSandboxLifecycleWorkflow({
-      sessionId,
-      reason: "sandbox-created",
+    const sandbox = await connectSandbox({
+      state: reservedState as SandboxState,
+      options: {
+        githubToken: githubToken ?? undefined,
+        gitUser,
+        timeout: DEFAULT_SANDBOX_TIMEOUT_MS,
+        ports: DEFAULT_SANDBOX_PORTS,
+        ...(sandboxType === "vercel" && {
+          baseSnapshotId: DEFAULT_SANDBOX_BASE_SNAPSHOT_ID,
+          persistent: !!sandboxName,
+          resume: !!sandboxName,
+          createIfMissing: !!sandboxName,
+        }),
+      },
     });
+
+    if (sessionId && sandbox.getState) {
+      const nextState = sandbox.getState() as SandboxState;
+      await updateSession(sessionId, {
+        sandboxState: nextState,
+        snapshotUrl: null,
+        snapshotCreatedAt: null,
+        lifecycleVersion: getNextLifecycleVersion(
+          sessionRecord?.lifecycleVersion,
+        ),
+        ...buildActiveLifecycleUpdate(nextState),
+      });
+
+      if (sessionRecord && sandboxType === "vercel") {
+        // TODO: Re-enable this once we have a solid exfiltration defense strategy.
+        // try {
+        //   await syncVercelProjectEnvVarsToSandbox({
+        //     userId: session.user.id,
+        //     sessionRecord,
+        //     sandbox,
+        //   });
+        // } catch (error) {
+        //   console.error(
+        //     `Failed to sync Vercel env vars for session ${sessionRecord.id}:`,
+        //     error,
+        //   );
+        // }
+
+        try {
+          await syncVercelCliAuthForSandbox({
+            userId: session.user.id,
+            sessionRecord,
+            sandbox,
+          });
+        } catch (error) {
+          console.error(
+            `Failed to prepare Vercel CLI auth for session ${sessionRecord.id}:`,
+            error,
+          );
+        }
+      }
+
+      if (sessionRecord) {
+        try {
+          await installSessionGlobalSkills({
+            sessionRecord,
+            sandbox,
+          });
+        } catch (error) {
+          console.error(
+            `Failed to install global skills for session ${sessionRecord.id}:`,
+            error,
+          );
+        }
+      }
+
+      kickSandboxLifecycleWorkflow({
+        sessionId,
+        reason: "sandbox-created",
+      });
+    }
+
+    const readyMs = Date.now() - startTime;
+
+    return Response.json({
+      createdAt: Date.now(),
+      timeout: DEFAULT_SANDBOX_TIMEOUT_MS,
+      currentBranch: repoUrl ? branch : undefined,
+      mode: sandboxType,
+      timing: { readyMs },
+    });
+  } catch (error) {
+    if (sessionId && reservedState?.type === "proxmox-lxc") {
+      await updateSession(sessionId, {
+        sandboxState: {
+          type: "proxmox-lxc",
+          ...(reservedState.source ? { source: reservedState.source } : {}),
+        },
+      });
+    }
+
+    if (error instanceof ProxmoxPoolCapacityError) {
+      return Response.json(
+        {
+          error: error.message,
+          reason: error.reason,
+        },
+        { status: 409 },
+      );
+    }
+
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("Failed to create sandbox:", error);
+    return Response.json({ error: message }, { status: 500 });
   }
-
-  const readyMs = Date.now() - startTime;
-
-  return Response.json({
-    createdAt: Date.now(),
-    timeout: DEFAULT_SANDBOX_TIMEOUT_MS,
-    currentBranch: repoUrl ? branch : undefined,
-    mode: "vercel",
-    timing: { readyMs },
-  });
 }
 
 export async function DELETE(req: Request) {

@@ -1,6 +1,10 @@
 import { eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import type { SandboxType } from "@/components/sandbox-selector-compact";
+import {
+  getConfiguredSandboxBackend,
+  isSupportedSandboxType,
+} from "@/lib/sandbox/backend";
 import { modelVariantsSchema, type ModelVariant } from "@/lib/model-variants";
 import {
   normalizeGlobalSkillRefs,
@@ -27,9 +31,9 @@ export interface UserPreferencesData {
 }
 
 const DEFAULT_PREFERENCES: UserPreferencesData = {
-  defaultModelId: "anthropic/claude-opus-4.6",
+  defaultModelId: "openai/gpt-5.4",
   defaultSubagentModelId: null,
-  defaultSandboxType: "vercel",
+  defaultSandboxType: getConfiguredSandboxBackend(),
   defaultDiffMode: "unified",
   autoCommitPush: false,
   autoCreatePr: false,
@@ -41,7 +45,6 @@ const DEFAULT_PREFERENCES: UserPreferencesData = {
   enabledModelIds: [],
 };
 
-const VALID_SANDBOX_TYPES: SandboxType[] = ["vercel"];
 const VALID_DIFF_MODES: DiffMode[] = ["unified", "split"];
 
 function normalizeSandboxType(value: unknown): SandboxType {
@@ -49,11 +52,8 @@ function normalizeSandboxType(value: unknown): SandboxType {
     return "vercel";
   }
 
-  if (
-    typeof value === "string" &&
-    VALID_SANDBOX_TYPES.includes(value as SandboxType)
-  ) {
-    return value as SandboxType;
+  if (isSupportedSandboxType(value)) {
+    return value;
   }
 
   return DEFAULT_PREFERENCES.defaultSandboxType;

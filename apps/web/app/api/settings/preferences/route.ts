@@ -4,6 +4,7 @@ import {
   type DiffMode,
   updateUserPreferences,
 } from "@/lib/db/user-preferences";
+import { getAvailableSandboxTypes } from "@/lib/sandbox/backend";
 import type { SandboxType } from "@/components/sandbox-selector-compact";
 import {
   globalSkillRefsSchema,
@@ -48,7 +49,7 @@ export async function PATCH(req: Request) {
   }
 
   if (body.defaultSandboxType !== undefined) {
-    const validTypes = ["vercel"];
+    const validTypes = getAvailableSandboxTypes();
     if (
       typeof body.defaultSandboxType !== "string" ||
       !validTypes.includes(body.defaultSandboxType)

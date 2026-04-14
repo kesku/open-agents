@@ -1,15 +1,14 @@
 import "server-only";
 
-import { gateway } from "ai";
 import { filterDisabledModels } from "./model-availability";
-import type { AvailableModel, AvailableModelCost } from "./models";
+import {
+  getAvailableLanguageModelsFromCatalog,
+  type AvailableModel,
+  type AvailableModelCost,
+} from "./models";
 
 const MODELS_DEV_URL = "https://models.dev/api.json";
 const MODELS_DEV_TIMEOUT_MS = 750;
-
-type GatewayModel = Awaited<
-  ReturnType<typeof gateway.getAvailableModels>
->["models"][number];
 
 interface ModelsDevMetadata {
   contextWindow?: number;
@@ -146,7 +145,7 @@ async function fetchModelsDevMetadataMap(): Promise<
 }
 
 function addModelsDevMetadata(
-  model: GatewayModel,
+  model: AvailableModel,
   metadataMap: Map<string, ModelsDevMetadata>,
 ): AvailableModel {
   const metadata = metadataMap.get(model.id);
@@ -173,10 +172,7 @@ function addModelsDevMetadata(
 export async function fetchAvailableLanguageModels(): Promise<
   AvailableModel[]
 > {
-  const { models } = await gateway.getAvailableModels();
-  return filterDisabledModels(
-    models.filter((model) => model.modelType === "language"),
-  );
+  return filterDisabledModels(getAvailableLanguageModelsFromCatalog());
 }
 
 export async function fetchAvailableLanguageModelsWithContext(): Promise<

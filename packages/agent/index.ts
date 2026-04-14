@@ -1,4 +1,10 @@
-export { type GatewayConfig, type GatewayOptions, gateway } from "./models";
+export {
+  type GatewayConfig,
+  type GatewayOptions,
+  gateway,
+  getConfiguredProviderIds,
+} from "./models";
+export { DEFAULT_FAST_MODEL_ID, DEFAULT_MAIN_MODEL_ID } from "./model-defaults";
 export type {
   AgentModelSelection,
   AgentSandboxContext,

@@ -1,5 +1,6 @@
 import { connectSandbox } from "@open-harness/sandbox";
-import { gateway, generateText } from "ai";
+import { gateway } from "@open-harness/agent";
+import { generateText } from "ai";
 import {
   ensureForkExists,
   extractGitHubOwnerFromRemoteUrl,
@@ -19,6 +20,7 @@ import { getUserGitHubToken } from "@/lib/github/user-token";
 import { getAppCoAuthorTrailer } from "@/lib/github/app-auth";
 import { isSandboxActive } from "@/lib/sandbox/utils";
 import { getServerSession } from "@/lib/session/get-server-session";
+import { DEFAULT_FAST_MODEL_ID } from "@/lib/models";
 
 // Allow up to 2 minutes for AI generation and git operations
 export const maxDuration = 120;
@@ -312,7 +314,7 @@ export async function POST(req: Request) {
       commitMessage = normalizedManualTitle.slice(0, 72);
     } else if (diffForCommit.trim()) {
       const commitMsgResult = await generateText({
-        model: gateway("anthropic/claude-haiku-4.5"),
+        model: gateway(DEFAULT_FAST_MODEL_ID),
         prompt: `Generate a concise git commit message for these changes. Use conventional commit format (e.g., "feat:", "fix:", "refactor:"). One line only, max 72 characters.
 
 Session context: ${sessionTitle}

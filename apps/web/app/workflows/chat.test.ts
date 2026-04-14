@@ -225,7 +225,9 @@ mock.module("ai", () => ({
     }),
 }));
 
-mock.module("@open-harness/agent", () => ({}));
+mock.module("@open-harness/agent", () => ({
+  getConfiguredProviderIds: () => ["openai"],
+}));
 
 const { runAgentWorkflow } = await import("./chat");
 

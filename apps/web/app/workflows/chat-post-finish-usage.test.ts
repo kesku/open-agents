@@ -71,6 +71,7 @@ mock.module("@/lib/db/workflow-runs", () => ({
 
 mock.module("@open-harness/agent", () => ({
   collectTaskToolUsageEvents: spies.collectTaskToolUsageEvents,
+  getConfiguredProviderIds: () => ["openai"],
   sumLanguageModelUsage: spies.sumLanguageModelUsage,
 }));
 

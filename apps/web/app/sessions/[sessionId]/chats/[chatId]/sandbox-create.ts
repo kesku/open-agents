@@ -1,4 +1,5 @@
 import type { SandboxInfo } from "./session-chat-context";
+import { getConfiguredSandboxBackend } from "@/lib/sandbox/backend";
 
 type CreateSandboxResponse = SandboxInfo & {
   type: string;
@@ -107,7 +108,7 @@ export async function createSandbox(
       branch: cloneUrl ? (branch ?? "main") : undefined,
       isNewBranch: cloneUrl ? isNewBranch : false,
       sessionId,
-      sandboxType: sandboxType ?? "vercel",
+      sandboxType: sandboxType ?? getConfiguredSandboxBackend(),
     }),
   });
 

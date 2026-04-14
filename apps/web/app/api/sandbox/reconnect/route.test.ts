@@ -53,6 +53,22 @@ mock.module("@/lib/sandbox/lifecycle", () => ({
     lifecycleRunId: null,
     lifecycleError: null,
   }),
+  buildStoppedLifecycleUpdate: (supportsResume: boolean) =>
+    supportsResume
+      ? {
+          lifecycleState: "hibernated",
+          sandboxExpiresAt: null,
+          hibernateAfter: null,
+          lifecycleRunId: null,
+          lifecycleError: null,
+        }
+      : {
+          lifecycleState: "provisioning",
+          sandboxExpiresAt: null,
+          hibernateAfter: null,
+          lifecycleRunId: null,
+          lifecycleError: null,
+        },
   getSandboxExpiresAtDate: (
     state: { expiresAt?: unknown } | null | undefined,
   ) =>
@@ -186,11 +202,11 @@ describe("/api/sandbox/reconnect", () => {
     expect(response.ok).toBe(true);
     expect(payload.status).toBe("expired");
     expect(payload.hasSnapshot).toBe(false);
-    expect(payload.lifecycle.state).toBe("hibernated");
+    expect(payload.lifecycle.state).toBe("provisioning");
 
     expect(updateCalls).toHaveLength(1);
     expect(updateCalls[0]?.sessionId).toBe("session-1");
-    expect(updateCalls[0]?.patch.lifecycleState).toBe("hibernated");
+    expect(updateCalls[0]?.patch.lifecycleState).toBe("provisioning");
     expect(updateCalls[0]?.patch.lifecycleError).toBeNull();
     expect(updateCalls[0]?.patch.sandboxState).toEqual({
       type: "vercel",

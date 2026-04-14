@@ -6,7 +6,7 @@ import {
 } from "@/app/api/sessions/_lib/session-context";
 import { updateSession } from "@/lib/db/sessions";
 import {
-  buildHibernatedLifecycleUpdate,
+  buildStoppedLifecycleUpdate,
   getSandboxExpiresAtDate,
 } from "@/lib/sandbox/lifecycle";
 import {
@@ -182,8 +182,11 @@ export async function GET(req: Request): Promise<Response> {
 
     await updateSession(sessionId, {
       sandboxState: clearedState,
-      ...buildHibernatedLifecycleUpdate(),
+      ...buildStoppedLifecycleUpdate(hasResumeStateAfterFailure),
     });
+    const expiredLifecycleState = hasResumeStateAfterFailure
+      ? "hibernated"
+      : "provisioning";
     console.error(
       `[Reconnect] session=${sessionId} status=expired hasSnapshot=${hasResumeStateAfterFailure} error=${message}`,
     );
@@ -192,7 +195,7 @@ export async function GET(req: Request): Promise<Response> {
       hasSnapshot: hasResumeStateAfterFailure,
       lifecycle: {
         serverTime: Date.now(),
-        state: "hibernated",
+        state: expiredLifecycleState,
         lastActivityAt: null,
         hibernateAfter: null,
         sandboxExpiresAt: null,

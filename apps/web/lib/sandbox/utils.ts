@@ -23,11 +23,53 @@ function getLegacySandboxId(state: unknown): string | null {
   return hasNonEmptyString(sandboxId) ? sandboxId : null;
 }
 
+function getProxmoxLeaseId(state: unknown): string | null {
+  if (!state || typeof state !== "object") {
+    return null;
+  }
+
+  const leaseId = (state as { leaseId?: unknown }).leaseId;
+  return hasNonEmptyString(leaseId) ? leaseId : null;
+}
+
+function hasProxmoxRuntimeHandle(state: unknown): boolean {
+  if (!state || typeof state !== "object") {
+    return false;
+  }
+
+  const leaseId = getProxmoxLeaseId(state);
+  const nodeId = (state as { nodeId?: unknown }).nodeId;
+  const host = (state as { host?: unknown }).host;
+  const sshUser = (state as { sshUser?: unknown }).sshUser;
+  const workspacePath = (state as { workspacePath?: unknown }).workspacePath;
+
+  return (
+    leaseId !== null &&
+    hasNonEmptyString(nodeId) &&
+    hasNonEmptyString(host) &&
+    hasNonEmptyString(sshUser) &&
+    hasNonEmptyString(workspacePath)
+  );
+}
+
+function getSandboxType(state: unknown): SandboxState["type"] | null {
+  if (!state || typeof state !== "object") {
+    return null;
+  }
+
+  const type = (state as { type?: unknown }).type;
+  return type === "proxmox-lxc" || type === "vercel" ? type : null;
+}
+
 export function getSessionSandboxName(sessionId: string): string {
   return `session_${sessionId}`;
 }
 
 export function getPersistentSandboxName(state: unknown): string | null {
+  if (getSandboxType(state) !== "vercel") {
+    return null;
+  }
+
   if (!state || typeof state !== "object") {
     return null;
   }
@@ -37,6 +79,10 @@ export function getPersistentSandboxName(state: unknown): string | null {
 }
 
 export function getResumableSandboxName(state: unknown): string | null {
+  if (getSandboxType(state) !== "vercel") {
+    return null;
+  }
+
   return getPersistentSandboxName(state) ?? getLegacySandboxId(state);
 }
 
@@ -89,6 +135,11 @@ export function hasRuntimeSandboxState(state: unknown): boolean {
     return false;
   }
 
+  const sandboxType = getSandboxType(state);
+  if (sandboxType === "proxmox-lxc") {
+    return hasProxmoxRuntimeHandle(state);
+  }
+
   return hasResumableSandboxState(state);
 }
 
@@ -106,6 +157,10 @@ export function isSandboxNotFoundError(message: string): boolean {
 export function isSandboxUnavailableError(message: string): boolean {
   const normalized = message.toLowerCase();
   return (
+    normalized.includes("connection timed out") ||
+    normalized.includes("connection refused") ||
+    normalized.includes("could not resolve hostname") ||
+    normalized.includes("permission denied") ||
     normalized.includes("expected a stream of command data") ||
     normalized.includes("status code 410") ||
     normalized.includes("status code 404") ||
@@ -121,7 +176,9 @@ function hasRuntimeState(state: SandboxState): boolean {
     return false;
   }
 
-  return hasResumableSandboxState(state);
+  return state.type === "proxmox-lxc"
+    ? hasProxmoxRuntimeHandle(state)
+    : hasResumableSandboxState(state);
 }
 
 /**
@@ -131,6 +188,13 @@ export function clearSandboxState(
   state: SandboxState | null | undefined,
 ): SandboxState | null {
   if (!state) return null;
+
+  if (state.type === "proxmox-lxc") {
+    return {
+      type: state.type,
+      ...(state.source ? { source: state.source } : {}),
+    } as SandboxState;
+  }
 
   const sandboxName = getPersistentSandboxName(state);
   const sandboxId = sandboxName ? null : getLegacySandboxId(state);
@@ -150,7 +214,12 @@ export function clearSandboxResumeState(
 ): SandboxState | null {
   if (!state) return null;
 
-  return { type: state.type } as SandboxState;
+  return {
+    type: state.type,
+    ...(state.type === "proxmox-lxc" && state.source
+      ? { source: state.source }
+      : {}),
+  } as SandboxState;
 }
 
 /**

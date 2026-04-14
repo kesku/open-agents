@@ -7,9 +7,8 @@
  * for sandbox bootstrapping flows.
  */
 
+import { DEFAULT_WORKING_DIRECTORY } from "@/lib/sandbox/config";
 import { gunzipSync } from "zlib";
-
-const DEFAULT_WORKING_DIRECTORY = "/vercel/sandbox";
 
 // Lock files to skip - they're large and not useful for agent exploration
 const LOCK_FILES = new Set([
@@ -67,7 +66,7 @@ function buildTarballUrl(owner: string, repo: string, ref: string): string {
  * @param repoUrl - GitHub repository URL (e.g., "https://github.com/owner/repo")
  * @param branch - Branch name (defaults to "main")
  * @param token - GitHub token for authentication (optional, helps with rate limits)
- * @param workingDirectory - Base path for extracted files (defaults to "/vercel/sandbox")
+ * @param workingDirectory - Base path for extracted files
  * @returns TarballResult with files map and metadata
  */
 export async function downloadAndExtractTarball(

@@ -20,10 +20,14 @@ mock.module("ai", () => {
   const gateway = (modelId: string) => ({ modelId });
 
   return {
+    defaultSettingsMiddleware: (_settings: unknown) => ({
+      kind: "default-settings-middleware",
+    }),
     tool: <T extends Record<string, unknown>>(definition: T) => definition,
     gateway,
     stepCountIs: (count: number) => ({ count }),
     ToolLoopAgent: MockToolLoopAgent,
+    wrapLanguageModel: ({ model }: { model: unknown }) => model,
     getToolName: (part: { toolName?: string; type?: string }) => {
       if (part.toolName) {
         return part.toolName;

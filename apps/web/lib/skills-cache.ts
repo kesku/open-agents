@@ -41,6 +41,20 @@ function getSharedRedisClient(): SkillsCacheRedisClient | null {
 }
 
 function getSandboxScope(state: SandboxState | null | undefined): string {
+  if (state && "leaseId" in state) {
+    const leaseId = state.leaseId;
+    if (typeof leaseId === "string" && leaseId.length > 0) {
+      return leaseId;
+    }
+  }
+
+  if (state && "nodeId" in state) {
+    const nodeId = state.nodeId;
+    if (typeof nodeId === "string" && nodeId.length > 0) {
+      return nodeId;
+    }
+  }
+
   if (state && "sandboxName" in state) {
     const sandboxName = state.sandboxName;
     if (typeof sandboxName === "string" && sandboxName.length > 0) {

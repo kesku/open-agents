@@ -1,4 +1,4 @@
-import { DEFAULT_MODEL_ID } from "@/lib/models";
+import { DEFAULT_MODEL_ID } from "@/lib/model-defaults";
 
 const DISABLED_MODEL_IDS = new Set(["openai/gpt-5.4-pro"]);
 

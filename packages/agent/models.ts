@@ -1,18 +1,27 @@
 import {
-  createGateway,
+  createAnthropic,
+  type AnthropicLanguageModelOptions,
+} from "@ai-sdk/anthropic";
+import { devToolsMiddleware } from "@ai-sdk/devtools";
+import {
+  createOpenAI,
+  type OpenAIResponsesProviderOptions,
+} from "@ai-sdk/openai";
+import type { LanguageModelV3 } from "@ai-sdk/provider";
+import {
   defaultSettingsMiddleware,
-  gateway as aiGateway,
   wrapLanguageModel,
-  type GatewayModelId,
   type JSONValue,
   type LanguageModel,
 } from "ai";
-import { devToolsMiddleware } from "@ai-sdk/devtools";
-import type { AnthropicLanguageModelOptions } from "@ai-sdk/anthropic";
-import type { OpenAIResponsesProviderOptions } from "@ai-sdk/openai";
 
-// Models with 4.5+ support adaptive thinking with effort control.
-// Older models use the legacy extended thinking API with a budget.
+const defaultOpenAIProvider = createOpenAI();
+const defaultAnthropicProvider = createAnthropic();
+
+// Kept as a compatibility alias for existing call sites. Model ids are now
+// resolved directly through the provider registry instead of AI Gateway.
+export type GatewayModelId = string;
+
 function getAnthropicSettings(modelId: string): AnthropicLanguageModelOptions {
   if (modelId.includes("4.6")) {
     return {
@@ -96,7 +105,7 @@ export interface GatewayOptions {
   providerOptionsOverrides?: ProviderOptionsByProvider;
 }
 
-export type { GatewayModelId, LanguageModel, JSONValue };
+export type { LanguageModel, JSONValue };
 
 export function shouldApplyOpenAIReasoningDefaults(modelId: string): boolean {
   return modelId.startsWith("openai/gpt-5");
@@ -112,23 +121,18 @@ export function getProviderOptionsForModel(
 ): ProviderOptionsByProvider {
   const defaultProviderOptions: ProviderOptionsByProvider = {};
 
-  // Apply anthropic defaults
   if (modelId.startsWith("anthropic/")) {
     defaultProviderOptions.anthropic = toProviderOptionsRecord(
       getAnthropicSettings(modelId),
     );
   }
 
-  // OpenAI model responses should never be persisted.
   if (modelId.startsWith("openai/")) {
     defaultProviderOptions.openai = toProviderOptionsRecord({
       store: false,
     } satisfies OpenAIResponsesProviderOptions);
   }
 
-  // Apply OpenAI defaults for all GPT-5 variants to expose encrypted reasoning content.
-  // This avoids Responses API failures when `store: false`, e.g.:
-  // "Item with id 'rs_...' not found. Items are not persisted when `store` is set to false."
   if (shouldApplyOpenAIReasoningDefaults(modelId)) {
     defaultProviderOptions.openai = mergeRecords(
       defaultProviderOptions.openai ?? {},
@@ -153,7 +157,6 @@ export function getProviderOptionsForModel(
     providerOptionsOverrides,
   );
 
-  // Enforce OpenAI non-persistence even when custom provider overrides are present.
   if (modelId.startsWith("openai/")) {
     providerOptions.openai = mergeRecords(
       providerOptions.openai ?? {},
@@ -166,18 +169,92 @@ export function getProviderOptionsForModel(
   return providerOptions;
 }
 
+function hasEnv(name: string): boolean {
+  const value = process.env[name];
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+export function getConfiguredProviderIds(): string[] {
+  const configuredProviders: string[] = [];
+
+  if (
+    hasEnv("OPENAI_API_KEY") ||
+    hasEnv("OPENAI_BASE_URL") ||
+    hasEnv("NEXT_PUBLIC_OPENAI_BASE_URL")
+  ) {
+    configuredProviders.push("openai");
+  }
+
+  if (
+    hasEnv("ANTHROPIC_API_KEY") ||
+    hasEnv("ANTHROPIC_AUTH_TOKEN") ||
+    hasEnv("ANTHROPIC_BASE_URL")
+  ) {
+    configuredProviders.push("anthropic");
+  }
+
+  return configuredProviders;
+}
+
+function splitModelId(modelId: string): {
+  providerId: string;
+  providerModelId: string;
+} {
+  const slashIndex = modelId.indexOf("/");
+  if (slashIndex <= 0 || slashIndex === modelId.length - 1) {
+    throw new Error(
+      `Invalid model id "${modelId}". Expected "provider/model".`,
+    );
+  }
+
+  return {
+    providerId: modelId.slice(0, slashIndex),
+    providerModelId: modelId.slice(slashIndex + 1),
+  };
+}
+
+function createProviderModel(
+  providerId: string,
+  providerModelId: string,
+  config?: GatewayConfig,
+): LanguageModelV3 {
+  if (providerId === "openai") {
+    const provider = config
+      ? createOpenAI({
+          apiKey: config.apiKey,
+          baseURL: config.baseURL,
+        })
+      : defaultOpenAIProvider;
+
+    return provider(providerModelId);
+  }
+
+  if (providerId === "anthropic") {
+    const provider = config
+      ? createAnthropic({
+          apiKey: config.apiKey,
+          baseURL: config.baseURL,
+        })
+      : defaultAnthropicProvider;
+
+    return provider(providerModelId);
+  }
+
+  throw new Error(`Unsupported model provider "${providerId}".`);
+}
+
 export function gateway(
   modelId: GatewayModelId,
   options: GatewayOptions = {},
-): LanguageModel {
+): LanguageModelV3 {
   const { devtools = false, config, providerOptionsOverrides } = options;
+  const { providerId, providerModelId } = splitModelId(modelId);
 
-  // Use custom gateway config or default AI SDK gateway
-  const baseGateway = config
-    ? createGateway({ baseURL: config.baseURL, apiKey: config.apiKey })
-    : aiGateway;
-
-  let model: LanguageModel = baseGateway(modelId);
+  let model: LanguageModelV3 = createProviderModel(
+    providerId,
+    providerModelId,
+    config,
+  );
 
   const providerOptions = getProviderOptionsForModel(
     modelId,
@@ -193,7 +270,6 @@ export function gateway(
     });
   }
 
-  // Apply devtools middleware if requested
   if (devtools) {
     model = wrapLanguageModel({ model, middleware: devToolsMiddleware() });
   }

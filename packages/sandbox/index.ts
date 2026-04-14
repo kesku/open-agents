@@ -20,6 +20,13 @@ export {
   type SandboxConnectConfig,
 } from "./factory";
 
+// proxmox
+export {
+  connectProxmoxLxc,
+  ProxmoxLxcSandbox,
+  type ProxmoxLxcState,
+} from "./proxmox";
+
 // vercel
 export {
   connectVercelSandbox,

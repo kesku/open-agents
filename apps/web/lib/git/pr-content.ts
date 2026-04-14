@@ -8,6 +8,7 @@ import { getGitHubAccount } from "@/lib/db/accounts";
 import { db } from "@/lib/db/client";
 import { getChatsBySessionId, getSessionById } from "@/lib/db/sessions";
 import { users } from "@/lib/db/schema";
+import { DEFAULT_FAST_MODEL_ID } from "@/lib/models";
 
 const prContentSchema = z.object({
   title: z
@@ -302,7 +303,7 @@ export async function generatePullRequestContentFromSandbox(
   let prContent: z.infer<typeof prContentSchema>;
   try {
     const { output } = await generateText({
-      model: gateway("anthropic/claude-haiku-4.5"),
+      model: gateway(DEFAULT_FAST_MODEL_ID),
       output: Output.object({
         schema: prContentSchema,
       }),

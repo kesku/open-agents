@@ -14,6 +14,7 @@ import {
   canOperateOnSandbox,
   clearSandboxState,
   getPersistentSandboxName,
+  hasResumableSandboxState,
 } from "./utils";
 
 export type SandboxLifecycleState =
@@ -119,6 +120,22 @@ export function buildHibernatedLifecycleUpdate(): LifecycleUpdate {
   };
 }
 
+export function buildStoppedLifecycleUpdate(
+  supportsResume: boolean,
+): LifecycleUpdate {
+  if (supportsResume) {
+    return buildHibernatedLifecycleUpdate();
+  }
+
+  return {
+    lifecycleState: "provisioning",
+    sandboxExpiresAt: null,
+    hibernateAfter: null,
+    lifecycleRunId: null,
+    lifecycleError: null,
+  };
+}
+
 function getInactivityDueAtMs(source: LifecycleTimingSource): number {
   if (source.hibernateAfter) {
     return source.hibernateAfter.getTime();
@@ -184,9 +201,6 @@ export async function evaluateSandboxLifecycle(
   if (!canOperateOnSandbox(sandboxState)) {
     return { action: "skipped", reason: "sandbox-not-operable" };
   }
-  if (sandboxState.type !== "vercel") {
-    return { action: "skipped", reason: "unsupported-sandbox-type" };
-  }
 
   const nowMs = Date.now();
   const dueAtMs = getLifecycleDueAtMs(session);
@@ -241,11 +255,13 @@ export async function evaluateSandboxLifecycle(
     await sandbox.stop();
 
     const clearedState = clearSandboxState(sandboxState);
+    const supportsResume =
+      hasResumableSandboxState(clearedState) || !!session.snapshotUrl;
     await updateSession(sessionId, {
       snapshotUrl: null,
       snapshotCreatedAt: null,
       sandboxState: clearedState,
-      ...buildHibernatedLifecycleUpdate(),
+      ...buildStoppedLifecycleUpdate(supportsResume),
     });
     console.log(
       `[Lifecycle] Hibernated sandbox for session ${sessionId} (reason=${reason}, sandboxName=${getPersistentSandboxName(clearedState) ?? "none"}).`,

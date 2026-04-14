@@ -6,6 +6,10 @@ import {
 } from "@/app/api/sessions/_lib/session-context";
 import { updateSession } from "@/lib/db/sessions";
 import {
+  getConfiguredSandboxBackend,
+  getSandboxCapabilities,
+} from "@/lib/sandbox/backend";
+import {
   DEFAULT_SANDBOX_PORTS,
   DEFAULT_SANDBOX_TIMEOUT_MS,
 } from "@/lib/sandbox/config";
@@ -31,6 +35,16 @@ interface CreateSnapshotRequest {
 
 interface RestoreSnapshotRequest {
   sessionId: string;
+}
+
+function getSnapshotDisabledResponse() {
+  return Response.json(
+    {
+      error:
+        "Snapshot pause/resume is disabled for the configured sandbox backend.",
+    },
+    { status: 400 },
+  );
 }
 
 /**
@@ -70,6 +84,9 @@ export async function POST(req: Request) {
   const sandboxState = sessionRecord.sandboxState;
   if (!sandboxState) {
     return Response.json({ error: "Sandbox not initialized" }, { status: 400 });
+  }
+  if (!getSandboxCapabilities(sandboxState).supportsSnapshots) {
+    return getSnapshotDisabledResponse();
   }
 
   try {
@@ -133,16 +150,11 @@ export async function PUT(req: Request) {
   }
 
   const { sessionRecord } = sessionContext;
-  const sandboxType = sessionRecord.sandboxState?.type ?? "vercel";
+  const sandboxType =
+    sessionRecord.sandboxState?.type ?? getConfiguredSandboxBackend();
 
-  if (sandboxType !== "vercel") {
-    return Response.json(
-      {
-        error:
-          "Snapshot restoration is only supported for the current cloud sandbox provider",
-      },
-      { status: 400 },
-    );
+  if (!getSandboxCapabilities(sandboxType).supportsSnapshots) {
+    return getSnapshotDisabledResponse();
   }
 
   if (hasRuntimeSandboxState(sessionRecord.sandboxState)) {

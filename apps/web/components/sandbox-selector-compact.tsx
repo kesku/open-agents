@@ -2,6 +2,13 @@
 
 import { useState } from "react";
 import { ChevronDown, CheckIcon } from "lucide-react";
+import {
+  getAvailableSandboxTypes,
+  getConfiguredSandboxBackend,
+  getSandboxOptionDescription,
+  getSandboxOptionLabel,
+  type AppSandboxType,
+} from "@/lib/sandbox/backend";
 import { cn } from "@/lib/utils";
 import {
   Popover,
@@ -16,7 +23,7 @@ import {
   CommandList,
 } from "@/components/ui/command";
 
-export type SandboxType = "vercel";
+export type SandboxType = AppSandboxType;
 
 interface SandboxOption {
   id: SandboxType;
@@ -24,15 +31,15 @@ interface SandboxOption {
   description: string;
 }
 
-export const SANDBOX_OPTIONS: SandboxOption[] = [
-  {
-    id: "vercel",
-    name: "Vercel",
-    description: "Cloud sandbox",
-  },
-];
+export const SANDBOX_OPTIONS: SandboxOption[] = getAvailableSandboxTypes().map(
+  (type) => ({
+    id: type,
+    name: getSandboxOptionLabel(type),
+    description: getSandboxOptionDescription(type),
+  }),
+);
 
-export const DEFAULT_SANDBOX_TYPE: SandboxType = "vercel";
+export const DEFAULT_SANDBOX_TYPE: SandboxType = getConfiguredSandboxBackend();
 
 interface SandboxSelectorCompactProps {
   value: SandboxType;
