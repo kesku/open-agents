@@ -3,6 +3,10 @@ import { getGitHubAccount } from "@/lib/db/accounts";
 import { getInstallationsByUserId } from "@/lib/db/installations";
 import { isGitHubAppConfigured } from "@/lib/github/app-auth";
 import { getInstallationManageUrl } from "@/lib/github/installation-url";
+import {
+  getGitHubConnectionModeForUser,
+  getLocalGitHubProfile,
+} from "@/lib/github/local-github";
 import { getUserGitHubToken } from "@/lib/github/user-token";
 import { getServerSession } from "@/lib/session/get-server-session";
 
@@ -35,6 +39,7 @@ export interface OrgInstallStatus {
 }
 
 export interface ConnectionStatusResponse {
+  mode?: "oauth-app" | "local-token";
   user: GitHubUserProfile;
   /** Whether the user's personal account has the app installed */
   personalInstallStatus: "installed" | "not_installed";
@@ -49,6 +54,31 @@ export async function GET() {
   const session = await getServerSession();
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+  }
+
+  if (getGitHubConnectionModeForUser(session.user.id) === "local-token") {
+    const localProfile = await getLocalGitHubProfile(session.user.id);
+    if (!localProfile) {
+      return NextResponse.json(
+        { error: "Failed to resolve local GitHub profile" },
+        { status: 502 },
+      );
+    }
+
+    const response: ConnectionStatusResponse = {
+      mode: "local-token",
+      user: {
+        githubId: localProfile.githubId,
+        login: localProfile.login,
+        avatarUrl: localProfile.avatarUrl,
+      },
+      personalInstallStatus: "installed",
+      personalInstallationUrl: null,
+      personalRepositorySelection: "all",
+      orgs: [],
+    };
+
+    return NextResponse.json(response);
   }
 
   if (!isGitHubAppConfigured()) {
@@ -102,6 +132,7 @@ export async function GET() {
       }));
 
     const response: ConnectionStatusResponse = {
+      mode: "oauth-app",
       user: {
         githubId: Number(ghAccount.externalUserId) || 0,
         login: ghAccount.username,
@@ -229,6 +260,7 @@ export async function GET() {
     }
 
     const response: ConnectionStatusResponse = {
+      mode: "oauth-app",
       user: {
         githubId: user.id,
         login: user.login,

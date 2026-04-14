@@ -17,8 +17,11 @@ export function useSession() {
     session: data ?? null,
     loading: isLoading,
     isAuthenticated: !!data?.user,
+    authProvider: data?.authProvider,
     hasGitHub: data?.hasGitHub ?? false,
     hasGitHubAccount: data?.hasGitHubAccount ?? false,
     hasGitHubInstallations: data?.hasGitHubInstallations ?? false,
+    githubConnectionMode: data?.githubConnectionMode,
+    isLocalGitHub: data?.githubConnectionMode === "local-token",
   };
 }

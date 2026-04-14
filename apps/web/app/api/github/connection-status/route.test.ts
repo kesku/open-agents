@@ -15,6 +15,7 @@ let userToken: string | null;
 let syncedInstallationsCount = 0;
 let syncError: Error | null;
 let syncErrorIsAuth = false;
+let githubConnectionMode: "oauth-app" | "local-token" | null;
 
 mock.module("@/lib/session/get-server-session", () => ({
   getServerSession: async () => authSession,
@@ -30,6 +31,11 @@ mock.module("@/lib/db/installations", () => ({
 
 mock.module("@/lib/github/user-token", () => ({
   getUserGitHubToken: async () => userToken,
+}));
+
+mock.module("@/lib/github/local-github", () => ({
+  getGitHubConnectionModeForUser: () => githubConnectionMode,
+  getLocalGitHubProfile: async () => null,
 }));
 
 mock.module("@/lib/github/installations-sync", () => ({
@@ -54,6 +60,7 @@ describe("GET /api/github/connection-status", () => {
     syncedInstallationsCount = 1;
     syncError = null;
     syncErrorIsAuth = false;
+    githubConnectionMode = null;
   });
 
   test("returns 401 when unauthenticated", async () => {
@@ -79,6 +86,23 @@ describe("GET /api/github/connection-status", () => {
       reason: null,
       hasInstallations: false,
       syncedInstallationsCount: 0,
+      mode: "oauth-app",
+    });
+  });
+
+  test("returns connected for local token mode without installation sync", async () => {
+    githubConnectionMode = "local-token";
+    const { GET } = await routeModulePromise;
+
+    const response = await GET();
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      status: "connected",
+      reason: null,
+      hasInstallations: false,
+      syncedInstallationsCount: 0,
+      mode: "local-token",
     });
   });
 
@@ -94,6 +118,7 @@ describe("GET /api/github/connection-status", () => {
       reason: "token_unavailable",
       hasInstallations: true,
       syncedInstallationsCount: null,
+      mode: "oauth-app",
     });
   });
 
@@ -109,6 +134,7 @@ describe("GET /api/github/connection-status", () => {
       reason: "installations_missing",
       hasInstallations: false,
       syncedInstallationsCount: 0,
+      mode: "oauth-app",
     });
   });
 
@@ -124,6 +150,7 @@ describe("GET /api/github/connection-status", () => {
       reason: null,
       hasInstallations: true,
       syncedInstallationsCount: 2,
+      mode: "oauth-app",
     });
   });
 
@@ -140,6 +167,7 @@ describe("GET /api/github/connection-status", () => {
       reason: null,
       hasInstallations: false,
       syncedInstallationsCount: 0,
+      mode: "oauth-app",
     });
   });
 
@@ -156,6 +184,7 @@ describe("GET /api/github/connection-status", () => {
       reason: "sync_auth_failed",
       hasInstallations: true,
       syncedInstallationsCount: null,
+      mode: "oauth-app",
     });
   });
 });

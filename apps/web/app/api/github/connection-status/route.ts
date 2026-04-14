@@ -6,6 +6,7 @@ import {
   isGitHubInstallationsAuthError,
   syncUserInstallations,
 } from "@/lib/github/installations-sync";
+import { getGitHubConnectionModeForUser } from "@/lib/github/local-github";
 import { getUserGitHubToken } from "@/lib/github/user-token";
 import { getServerSession } from "@/lib/session/get-server-session";
 
@@ -14,6 +15,17 @@ export async function GET() {
 
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+  }
+
+  const connectionMode = getGitHubConnectionModeForUser(session.user.id);
+  if (connectionMode === "local-token") {
+    return NextResponse.json({
+      status: "connected",
+      reason: null,
+      hasInstallations: false,
+      syncedInstallationsCount: 0,
+      mode: connectionMode,
+    } satisfies GitHubConnectionStatusResponse);
   }
 
   const [ghAccount, installations] = await Promise.all([
@@ -27,6 +39,7 @@ export async function GET() {
       reason: null,
       hasInstallations: installations.length > 0,
       syncedInstallationsCount: installations.length,
+      mode: "oauth-app",
     } satisfies GitHubConnectionStatusResponse);
   }
 
@@ -37,6 +50,7 @@ export async function GET() {
       reason: "token_unavailable",
       hasInstallations: installations.length > 0,
       syncedInstallationsCount: null,
+      mode: "oauth-app",
     } satisfies GitHubConnectionStatusResponse);
   }
 
@@ -54,6 +68,7 @@ export async function GET() {
       reason: reconnectRequired ? "installations_missing" : null,
       hasInstallations: syncedInstallationsCount > 0,
       syncedInstallationsCount,
+      mode: "oauth-app",
     } satisfies GitHubConnectionStatusResponse);
   } catch (error) {
     if (isGitHubInstallationsAuthError(error)) {
@@ -62,6 +77,7 @@ export async function GET() {
         reason: "sync_auth_failed",
         hasInstallations: installations.length > 0,
         syncedInstallationsCount: null,
+        mode: "oauth-app",
       } satisfies GitHubConnectionStatusResponse);
     }
 
@@ -72,6 +88,7 @@ export async function GET() {
       reason: null,
       hasInstallations: installations.length > 0,
       syncedInstallationsCount: installations.length,
+      mode: "oauth-app",
     } satisfies GitHubConnectionStatusResponse);
   }
 }

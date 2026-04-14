@@ -49,6 +49,7 @@ interface OrgInstallStatus {
 }
 
 interface ConnectionStatusResponse {
+  mode?: "oauth-app" | "local-token";
   user: GitHubUserProfile;
   personalInstallStatus: "installed" | "not_installed";
   personalInstallationUrl: string | null;
@@ -281,7 +282,8 @@ function OrgRow({ org }: { org: OrgInstallStatus }) {
 }
 
 export function AccountsSection() {
-  const { hasGitHubAccount, hasGitHub, loading } = useSession();
+  const { authProvider, hasGitHubAccount, hasGitHub, isLocalGitHub, loading } =
+    useSession();
   const { mutate } = useSWRConfig();
   const [unlinking, setUnlinking] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -363,7 +365,11 @@ export function AccountsSection() {
 
         <div className="space-y-4 p-4">
           {!hasGitHub ? (
-            <NotConnectedState />
+            authProvider === "local" ? (
+              <LocalGitHubSetupState />
+            ) : (
+              <NotConnectedState />
+            )
           ) : connectionLoading && !connectionData ? (
             <ConnectionLoadingSkeleton />
           ) : reconnectRequired && !connectionData ? (
@@ -374,14 +380,20 @@ export function AccountsSection() {
           ) : connectionError && !connectionData ? (
             <ConnectionErrorState onRetry={handleRefresh} />
           ) : connectionData ? (
-            <ConnectedState
-              data={connectionData}
-              reconnectRequired={reconnectRequired}
-              reconnectReason={reason}
-              tokenExpired={tokenExpired}
-              unlinking={unlinking}
-              onUnlink={handleUnlink}
-            />
+            connectionData.mode === "local-token" || isLocalGitHub ? (
+              <LocalGitHubConnectedState data={connectionData} />
+            ) : (
+              <ConnectedState
+                data={connectionData}
+                reconnectRequired={reconnectRequired}
+                reconnectReason={reason}
+                tokenExpired={tokenExpired}
+                unlinking={unlinking}
+                onUnlink={handleUnlink}
+              />
+            )
+          ) : authProvider === "local" ? (
+            <LocalGitHubSetupState />
           ) : (
             <NotConnectedState />
           )}
@@ -405,6 +417,21 @@ function NotConnectedState() {
       >
         Connect
       </Button>
+    </div>
+  );
+}
+
+function LocalGitHubSetupState() {
+  return (
+    <div className="space-y-3 rounded-lg border border-border/50 bg-muted/20 p-4">
+      <p className="text-sm font-medium text-foreground">
+        GitHub is managed on the server in local mode
+      </p>
+      <p className="text-sm text-muted-foreground">
+        Add <code>LOCAL_GITHUB_ACCESS_TOKEN</code> to the deployment env and
+        restart the app to enable repository clone, push, and PR actions for
+        this single-user setup.
+      </p>
     </div>
   );
 }
@@ -663,5 +690,43 @@ function ConnectedState({
         </DialogContent>
       </Dialog>
     </>
+  );
+}
+
+function LocalGitHubConnectedState({
+  data,
+}: {
+  data: ConnectionStatusResponse;
+}) {
+  return (
+    <div className="space-y-3 rounded-lg border border-border/50 bg-muted/20 p-4">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <Avatar className="size-9 rounded-sm">
+            <AvatarImage src={data.user.avatarUrl} alt={data.user.login} />
+            <AvatarFallback className="rounded-sm">
+              {data.user.login.charAt(0).toUpperCase()}
+            </AvatarFallback>
+          </Avatar>
+          <div className="min-w-0">
+            <p className="truncate text-sm font-medium">{data.user.login}</p>
+            <p className="text-xs text-muted-foreground">
+              Local token-backed GitHub access
+            </p>
+          </div>
+        </div>
+
+        <span className="inline-flex shrink-0 items-center rounded-full bg-green-500/10 px-2 py-1 text-[11px] font-medium text-green-600 dark:text-green-400">
+          Local token
+        </span>
+      </div>
+
+      <div className="text-sm text-muted-foreground">
+        Repository access for this deployment is supplied by server env, not by
+        in-app OAuth or GitHub App installation. Update or remove{" "}
+        <code>LOCAL_GITHUB_ACCESS_TOKEN</code> on the server to change the
+        active GitHub identity.
+      </div>
+    </div>
   );
 }

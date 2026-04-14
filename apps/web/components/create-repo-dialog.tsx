@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import useSWR from "swr";
 import { Check, ExternalLink, FolderGit2, Loader2 } from "lucide-react";
 import {
   Dialog,
@@ -24,6 +23,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
+import { useGitHubAccounts } from "@/hooks/use-github-accounts";
 import type { Session } from "@/lib/db/schema";
 import { buildGitHubReconnectUrl } from "@/lib/github/connection-status";
 
@@ -45,20 +45,6 @@ interface CreateRepoResult {
   repoUrl: string;
   owner: string;
   repoName: string;
-}
-
-interface Installation {
-  installationId: number;
-  accountLogin: string;
-  accountType: "User" | "Organization";
-  repositorySelection: string;
-}
-
-async function fetchInstallations(): Promise<Installation[]> {
-  const response = await fetch("/api/github/installations");
-  if (!response.ok) return [];
-  const data = await response.json();
-  return Array.isArray(data) ? data : [];
 }
 
 function getCurrentPathWithSearch(): string {
@@ -95,12 +81,8 @@ export function CreateRepoDialog({
     window.location.href = buildGitHubReconnectUrl(getCurrentPathWithSearch());
   };
 
-  // Use SWR for installations (shares cache with RepoSelectorCompact)
-  const { data: installations = [], isLoading: loadingInstallations } = useSWR<
-    Installation[]
-  >(
-    open && !reconnectRequired ? "github-installations" : null,
-    fetchInstallations,
+  const { accounts, isLoading: loadingAccounts } = useGitHubAccounts(
+    open && !reconnectRequired,
   );
 
   // Reset form state when dialog opens
@@ -117,15 +99,10 @@ export function CreateRepoDialog({
 
   // Auto-select first installation when data arrives
   useEffect(() => {
-    if (
-      open &&
-      installations.length > 0 &&
-      !selectedOwner &&
-      installations[0]
-    ) {
-      setSelectedOwner(installations[0].accountLogin);
+    if (open && accounts.length > 0 && !selectedOwner && accounts[0]) {
+      setSelectedOwner(accounts[0].login);
     }
-  }, [open, installations, selectedOwner]);
+  }, [open, accounts, selectedOwner]);
 
   const handleCreate = async () => {
     if (!repoName.trim()) {
@@ -144,9 +121,7 @@ export function CreateRepoDialog({
     }
 
     if (!selectedOwner) {
-      setError(
-        "Select an account to create the repository under. Install the GitHub App on an account first.",
-      );
+      setError("Select an account to create the repository under.");
       return;
     }
 
@@ -257,12 +232,12 @@ export function CreateRepoDialog({
                       Reconnect GitHub
                     </Button>
                   </div>
-                ) : loadingInstallations ? (
+                ) : loadingAccounts ? (
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <Loader2 className="h-4 w-4 animate-spin" />
                     Loading accounts...
                   </div>
-                ) : installations.length > 0 ? (
+                ) : accounts.length > 0 ? (
                   <Select
                     value={selectedOwner}
                     onValueChange={setSelectedOwner}
@@ -272,21 +247,20 @@ export function CreateRepoDialog({
                       <SelectValue placeholder="Select an account" />
                     </SelectTrigger>
                     <SelectContent>
-                      {installations.map((inst) => (
-                        <SelectItem
-                          key={inst.installationId}
-                          value={inst.accountLogin}
-                        >
-                          {inst.accountLogin}
-                          {inst.accountType === "Organization" ? " (org)" : ""}
+                      {accounts.map((account) => (
+                        <SelectItem key={account.login} value={account.login}>
+                          {account.login}
+                          {account.accountType === "Organization"
+                            ? " (org)"
+                            : ""}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 ) : (
                   <p className="text-sm text-muted-foreground">
-                    No GitHub App installations found. Install the GitHub App on
-                    an account first.
+                    No GitHub accounts are available from the current server
+                    token.
                   </p>
                 )}
               </div>

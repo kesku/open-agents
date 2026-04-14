@@ -32,7 +32,7 @@ http://192.168.1.141:3000/sessions
 Current auth mode is local-only:
 
 - no Vercel OAuth
-- no GitHub auth
+- optional env-backed GitHub token auth
 - one fixed local user auto-signs in
 
 ## Runtime Environment
@@ -49,6 +49,7 @@ This env script provides values for:
 
 - `POSTGRES_URL` and related DB config
 - local auth config
+- optional local GitHub config
 - OpenAI provider config
 - Proxmox pool configuration
 - SSH key path for sandbox node access
@@ -95,6 +96,27 @@ Operational expectations:
 4. Let the app lease a Proxmox sandbox as needed
 5. Stop/end the sandbox when finished
 
+## Local GitHub Mode
+
+For this single-user local deployment, GitHub support is intended to come from server env instead of the hosted GitHub App + OAuth flow.
+
+```bash
+export LOCAL_GITHUB_ACCESS_TOKEN=...
+export LOCAL_GITHUB_USER_ID=...
+export LOCAL_GITHUB_USERNAME=...
+export LOCAL_GITHUB_NAME=...
+export LOCAL_GITHUB_AVATAR_URL=...
+```
+
+Notes:
+
+- `LOCAL_GITHUB_ACCESS_TOKEN` is the only required value.
+- `LOCAL_GITHUB_USER_ID`, `LOCAL_GITHUB_USERNAME`, and
+  `LOCAL_GITHUB_AVATAR_URL` are optional
+- The repo picker is local-first: it shows repositories visible to the server
+  token and also accepts pasted GitHub URLs like
+  `https://github.com/owner/repo` or `owner/repo`.
+
 ## Service Operations
 
 Check app status:
@@ -127,9 +149,4 @@ Currently I got working:
 - direct OpenAI model provider
 - fixed 4-node Proxmox LXC pool
 - hard reset on sandbox release
-
-Soon:
-
-- GitHub integration (later, this is MVP, should just need tokens tho)
-- OAuth-based multi-user auth (this is running locally for me, myself, and I)
-- snapshot/resume support for local Proxmox sandboxes
+- local env-backed GitHub mode

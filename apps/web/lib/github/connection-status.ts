@@ -13,6 +13,7 @@ export interface GitHubConnectionStatusResponse {
   reason: GitHubConnectionReason | null;
   hasInstallations: boolean;
   syncedInstallationsCount: number | null;
+  mode?: "oauth-app" | "local-token";
 }
 
 export function buildGitHubReconnectUrl(next: string): string {

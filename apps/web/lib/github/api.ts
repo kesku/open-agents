@@ -19,6 +19,34 @@ interface GitHubRepoInfo {
   default_branch: string;
 }
 
+interface GitHubRepositoryOwner {
+  login: string;
+}
+
+interface GitHubRepository {
+  name: string;
+  full_name: string;
+  description: string | null;
+  private: boolean;
+  clone_url: string;
+  updated_at: string;
+  language: string | null;
+  owner: GitHubRepositoryOwner;
+}
+
+export interface GitHubRepositorySummary {
+  name: string;
+  full_name: string;
+  description: string | null;
+  private: boolean;
+  clone_url: string;
+  updated_at: string;
+  language: string | null;
+  owner: GitHubRepositoryOwner;
+}
+
+const ACCESSIBLE_REPOS_MAX_PAGES = 20;
+
 function normalizeGitHubLimit(limit: number | undefined): number | undefined {
   return typeof limit === "number" && Number.isFinite(limit)
     ? Math.max(1, Math.min(limit, 100))
@@ -125,4 +153,61 @@ export async function fetchGitHubBranches(
       : allBranches,
     defaultBranch,
   };
+}
+
+interface FetchAccessibleGitHubRepositoriesOptions {
+  owner?: string;
+  query?: string;
+  limit?: number;
+}
+
+export async function fetchAccessibleGitHubRepositories(
+  token: string,
+  options?: FetchAccessibleGitHubRepositoriesOptions,
+): Promise<GitHubRepositorySummary[] | null> {
+  const ownerFilter = options?.owner?.trim().toLowerCase();
+  const queryFilter = options?.query?.trim().toLowerCase();
+  const normalizedLimit = normalizeGitHubLimit(options?.limit) ?? 50;
+  const allMatches: GitHubRepositorySummary[] = [];
+
+  const perPage = 100;
+
+  for (let page = 1; page <= ACCESSIBLE_REPOS_MAX_PAGES; page += 1) {
+    const repositories = await fetchGitHubAPI<GitHubRepository[]>(
+      `/user/repos?sort=updated&direction=desc&affiliation=owner,collaborator,organization_member&per_page=${perPage}&page=${page}`,
+      token,
+    );
+
+    if (!repositories) {
+      return page === 1 ? null : allMatches;
+    }
+
+    if (repositories.length === 0) {
+      break;
+    }
+
+    const pageMatches = repositories.filter((repository) => {
+      const matchesOwner = ownerFilter
+        ? repository.owner.login.toLowerCase() === ownerFilter
+        : true;
+      const matchesQuery = queryFilter
+        ? repository.full_name.toLowerCase().includes(queryFilter) ||
+          repository.name.toLowerCase().includes(queryFilter)
+        : true;
+
+      return matchesOwner && matchesQuery;
+    });
+
+    allMatches.push(...pageMatches);
+
+    if (allMatches.length >= normalizedLimit) {
+      break;
+    }
+
+    if (repositories.length < perPage) {
+      break;
+    }
+  }
+
+  return allMatches.slice(0, normalizedLimit);
 }

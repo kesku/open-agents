@@ -1,5 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
+import { getLocalGitHubProfile } from "@/lib/github/local-github";
 import { db } from "./client";
 import { accounts } from "./schema";
 
@@ -73,7 +74,22 @@ export async function getGitHubAccount(userId: string): Promise<{
     .where(and(eq(accounts.userId, userId), eq(accounts.provider, "github")))
     .limit(1);
 
-  return result[0] ?? null;
+  if (result[0]) {
+    return result[0];
+  }
+
+  const localGitHubProfile = await getLocalGitHubProfile(userId);
+  if (!localGitHubProfile) {
+    return null;
+  }
+
+  return {
+    accessToken: "",
+    refreshToken: null,
+    expiresAt: null,
+    username: localGitHubProfile.login,
+    externalUserId: String(localGitHubProfile.githubId),
+  };
 }
 
 export async function updateGitHubAccountTokens(

@@ -4,6 +4,7 @@ import {
   buildGitHubAuthRemoteUrl,
   isValidGitHubRepoName,
   isValidGitHubRepoOwner,
+  parseGitHubRepoReference,
 } from "./repo-identifiers";
 
 describe("repo-identifiers", () => {
@@ -17,6 +18,41 @@ describe("repo-identifiers", () => {
   test("rejects unsafe GitHub owner and repo segments", () => {
     expect(isValidGitHubRepoOwner('vercel" && echo nope && "')).toBe(false);
     expect(isValidGitHubRepoName("open harness")).toBe(false);
+  });
+
+  test("parses bare repo references and common GitHub URLs", () => {
+    expect(parseGitHubRepoReference("vercel/open-harness")).toEqual({
+      owner: "vercel",
+      repo: "open-harness",
+    });
+    expect(
+      parseGitHubRepoReference("https://github.com/vercel/open-harness"),
+    ).toEqual({
+      owner: "vercel",
+      repo: "open-harness",
+    });
+    expect(
+      parseGitHubRepoReference(
+        "https://github.com/vercel/open-harness/tree/main",
+      ),
+    ).toEqual({
+      owner: "vercel",
+      repo: "open-harness",
+    });
+    expect(
+      parseGitHubRepoReference("git@github.com:vercel/open-harness.git"),
+    ).toEqual({
+      owner: "vercel",
+      repo: "open-harness",
+    });
+  });
+
+  test("rejects invalid repo references", () => {
+    expect(
+      parseGitHubRepoReference("https://example.com/vercel/open-harness"),
+    ).toBeNull();
+    expect(parseGitHubRepoReference("vercel/open harness")).toBeNull();
+    expect(parseGitHubRepoReference("")).toBeNull();
   });
 
   test("builds an encoded auth remote url for valid coordinates", () => {

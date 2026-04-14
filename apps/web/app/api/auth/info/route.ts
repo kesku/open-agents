@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import type { NextRequest } from "next/server";
 import { getGitHubAccount } from "@/lib/db/accounts";
 import { getInstallationsByUserId } from "@/lib/db/installations";
+import { getGitHubConnectionModeForUser } from "@/lib/github/local-github";
 import { userExists } from "@/lib/db/users";
 import { SESSION_COOKIE_NAME } from "@/lib/session/constants";
 import { getSessionFromReq } from "@/lib/session/server";
@@ -35,6 +36,9 @@ export async function GET(req: NextRequest) {
   const hasGitHubAccount = ghAccount !== null;
   const hasGitHubInstallations = installations.length > 0;
   const hasGitHub = hasGitHubAccount || hasGitHubInstallations;
+  const githubConnectionMode = hasGitHub
+    ? (getGitHubConnectionModeForUser(session.user.id) ?? "oauth-app")
+    : undefined;
 
   const data: SessionUserInfo = {
     user: session.user,
@@ -42,6 +46,7 @@ export async function GET(req: NextRequest) {
     hasGitHub,
     hasGitHubAccount,
     hasGitHubInstallations,
+    githubConnectionMode,
   };
 
   return Response.json(data);

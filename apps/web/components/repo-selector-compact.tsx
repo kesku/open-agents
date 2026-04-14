@@ -12,6 +12,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import useSWR from "swr";
 import { z } from "zod";
+import { LocalGitHubRepoSelector } from "@/components/local-github-repo-selector";
 import {
   Popover,
   PopoverContent,
@@ -123,12 +124,14 @@ function GitHubActionCard({
   title,
   description,
   buttonLabel,
+  buttonHref,
   onClick,
 }: {
   title: string;
   description: string;
-  buttonLabel: string;
-  onClick: () => void;
+  buttonLabel?: string;
+  buttonHref?: string;
+  onClick?: () => void;
 }) {
   return (
     <div className="flex flex-col items-center gap-3 rounded-lg border border-border/70 px-4 py-6 text-center dark:border-white/10">
@@ -137,13 +140,24 @@ function GitHubActionCard({
         <p className="text-sm font-medium">{title}</p>
         <p className="text-xs text-muted-foreground">{description}</p>
       </div>
-      <button
-        type="button"
-        onClick={onClick}
-        className="rounded-md bg-neutral-200 px-4 py-1.5 text-sm font-medium text-neutral-900 transition-colors hover:bg-neutral-300"
-      >
-        {buttonLabel}
-      </button>
+      {buttonLabel ? (
+        buttonHref ? (
+          <Link
+            href={buttonHref}
+            className="rounded-md bg-neutral-200 px-4 py-1.5 text-sm font-medium text-neutral-900 transition-colors hover:bg-neutral-300"
+          >
+            {buttonLabel}
+          </Link>
+        ) : (
+          <button
+            type="button"
+            onClick={onClick}
+            className="rounded-md bg-neutral-200 px-4 py-1.5 text-sm font-medium text-neutral-900 transition-colors hover:bg-neutral-300"
+          >
+            {buttonLabel}
+          </button>
+        )
+      ) : null}
     </div>
   );
 }
@@ -153,7 +167,12 @@ export function RepoSelectorCompact({
   selectedRepo,
   onSelect,
 }: RepoSelectorCompactProps) {
-  const { hasGitHub, loading: sessionLoading } = useSession();
+  const {
+    authProvider,
+    hasGitHub,
+    isLocalGitHub,
+    loading: sessionLoading,
+  } = useSession();
   const { reconnectRequired } = useGitHubConnectionStatus({
     enabled: hasGitHub,
   });
@@ -267,6 +286,17 @@ export function RepoSelectorCompact({
   const isInitialLoading = installationsLoading && installations.length === 0;
   const hasSelection = selectedOwner && selectedRepo;
 
+  if (!sessionLoading && authProvider === "local" && !hasGitHub) {
+    return (
+      <GitHubActionCard
+        title="GitHub token not configured"
+        description="Set LOCAL_GITHUB_ACCESS_TOKEN on the server and restart Open Agents to browse or clone repositories."
+        buttonLabel="Connections"
+        buttonHref="/settings/connections"
+      />
+    );
+  }
+
   // Not connected to GitHub
   if (!sessionLoading && !hasGitHub) {
     return (
@@ -286,6 +316,16 @@ export function RepoSelectorCompact({
         description="Your saved GitHub connection is no longer valid. Reconnect to refresh repository access."
         buttonLabel="Reconnect GitHub"
         onClick={startGitHubReconnect}
+      />
+    );
+  }
+
+  if (isLocalGitHub) {
+    return (
+      <LocalGitHubRepoSelector
+        selectedOwner={selectedOwner}
+        selectedRepo={selectedRepo}
+        onSelect={onSelect}
       />
     );
   }

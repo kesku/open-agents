@@ -2,12 +2,23 @@ import { cookies } from "next/headers";
 import { decrypt } from "@/lib/crypto";
 import { deleteGitHubAccount, getGitHubAccount } from "@/lib/db/accounts";
 import { deleteInstallationsByUserId } from "@/lib/db/installations";
+import { getGitHubConnectionModeForUser } from "@/lib/github/local-github";
 import { getServerSession } from "@/lib/session/get-server-session";
 
 export async function POST(): Promise<Response> {
   const session = await getServerSession();
   if (!session?.user?.id) {
     return Response.json({ error: "Not authenticated" }, { status: 401 });
+  }
+
+  if (getGitHubConnectionModeForUser(session.user.id) === "local-token") {
+    return Response.json(
+      {
+        error:
+          "GitHub is configured by LOCAL_GITHUB_ACCESS_TOKEN on this deployment. Remove or change the server env to disconnect it.",
+      },
+      { status: 400 },
+    );
   }
 
   try {

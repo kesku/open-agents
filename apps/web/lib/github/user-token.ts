@@ -1,6 +1,7 @@
 import "server-only";
 import { decrypt, encrypt } from "@/lib/crypto";
 import { getGitHubAccount, updateGitHubAccountTokens } from "@/lib/db/accounts";
+import { getLocalGitHubAccessToken } from "@/lib/github/local-github";
 import { getServerSession } from "@/lib/session/get-server-session";
 
 interface GitHubTokenRefreshResponse {
@@ -81,6 +82,11 @@ export async function getUserGitHubToken(
 ): Promise<string | null> {
   const resolvedUserId = userId ?? (await getServerSession())?.user?.id;
   if (!resolvedUserId) return null;
+
+  const localToken = getLocalGitHubAccessToken(resolvedUserId);
+  if (localToken) {
+    return localToken;
+  }
 
   try {
     const ghAccount = await getGitHubAccount(resolvedUserId);
