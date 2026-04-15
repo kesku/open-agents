@@ -1,5 +1,16 @@
 import type { SandboxState } from "@open-harness/sandbox";
-import { and, desc, eq, inArray, isNull, ne, sql } from "drizzle-orm";
+import {
+  and,
+  desc,
+  eq,
+  inArray,
+  isNotNull,
+  isNull,
+  lt,
+  ne,
+  or,
+  sql,
+} from "drizzle-orm";
 import { db } from "./client";
 import {
   chatMessages,
@@ -309,6 +320,70 @@ export async function updateSession(
     .returning();
 
   return session ? normalizeSessionRecord(session) : session;
+}
+
+export async function hasActiveChatStreamsInSession(
+  sessionId: string,
+): Promise<boolean> {
+  const [result] = await db
+    .select({ count: sql<number>`COUNT(*)::int` })
+    .from(chats)
+    .where(
+      and(eq(chats.sessionId, sessionId), isNotNull(chats.activeStreamId)),
+    );
+
+  return (result?.count ?? 0) > 0;
+}
+
+export async function claimSessionGitMutationLease(params: {
+  sessionId: string;
+  leaseId: string;
+  leaseType: string;
+  expiresAt: Date;
+}) {
+  const { sessionId, leaseId, leaseType, expiresAt } = params;
+  const now = new Date();
+  const [updated] = await db
+    .update(sessions)
+    .set({
+      gitMutationLeaseId: leaseId,
+      gitMutationLeaseType: leaseType,
+      gitMutationLeaseExpiresAt: expiresAt,
+      updatedAt: now,
+    })
+    .where(
+      and(
+        eq(sessions.id, sessionId),
+        or(
+          isNull(sessions.gitMutationLeaseId),
+          isNull(sessions.gitMutationLeaseExpiresAt),
+          lt(sessions.gitMutationLeaseExpiresAt, now),
+        ),
+      ),
+    )
+    .returning({ id: sessions.id });
+
+  return Boolean(updated);
+}
+
+export async function releaseSessionGitMutationLease(
+  sessionId: string,
+  leaseId: string,
+) {
+  const [updated] = await db
+    .update(sessions)
+    .set({
+      gitMutationLeaseId: null,
+      gitMutationLeaseType: null,
+      gitMutationLeaseExpiresAt: null,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(eq(sessions.id, sessionId), eq(sessions.gitMutationLeaseId, leaseId)),
+    )
+    .returning({ id: sessions.id });
+
+  return Boolean(updated);
 }
 
 /**

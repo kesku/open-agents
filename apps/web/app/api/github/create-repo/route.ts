@@ -1,7 +1,12 @@
 import { connectSandbox } from "@open-harness/sandbox";
 import { runCreateRepoWorkflow } from "@/app/api/github/create-repo/_lib/create-repo-workflow";
 import { getGitHubAccount } from "@/lib/db/accounts";
-import { getSessionById, updateSession } from "@/lib/db/sessions";
+import {
+  getSessionById,
+  hasActiveChatStreamsInSession,
+  updateSession,
+} from "@/lib/db/sessions";
+import { SessionGitMutationBusyError } from "@/lib/git/session-git-mutation";
 import { getUserGitHubToken } from "@/lib/github/user-token";
 import { isSandboxActive } from "@/lib/sandbox/utils";
 import { getServerSession } from "@/lib/session/get-server-session";
@@ -68,6 +73,16 @@ export async function POST(req: Request) {
     return Response.json({ error: "Sandbox not initialized" }, { status: 400 });
   }
 
+  if (await hasActiveChatStreamsInSession(sessionId)) {
+    return Response.json(
+      {
+        error:
+          "Wait for the active agent run in this session to finish before creating a repository.",
+      },
+      { status: 409 },
+    );
+  }
+
   // 4. Resolve GitHub OAuth token for repo creation
   const githubAccount = await getGitHubAccount(session.user.id);
   const repoToken = await getUserGitHubToken(session.user.id);
@@ -90,23 +105,33 @@ export async function POST(req: Request) {
   const sandbox = await connectSandbox(sessionRecord.sandboxState);
   const cwd = sandbox.workingDirectory;
 
-  const workflowResult = await runCreateRepoWorkflow({
-    sandbox,
-    cwd,
-    repoName,
-    description,
-    isPrivate,
-    sessionTitle,
-    owner,
-    accountType,
-    repoToken,
-    sessionUser: {
-      id: session.user.id,
-      username: session.user.username,
-      name: session.user.name ?? null,
-      email: session.user.email ?? null,
-    },
-  });
+  let workflowResult;
+  try {
+    workflowResult = await runCreateRepoWorkflow({
+      sessionId,
+      sandbox,
+      cwd,
+      repoName,
+      description,
+      isPrivate,
+      sessionTitle,
+      owner,
+      accountType,
+      repoToken,
+      sessionUser: {
+        id: session.user.id,
+        username: session.user.username,
+        name: session.user.name ?? null,
+        email: session.user.email ?? null,
+      },
+    });
+  } catch (error) {
+    if (error instanceof SessionGitMutationBusyError) {
+      return Response.json({ error: error.message }, { status: 409 });
+    }
+
+    throw error;
+  }
   if (!workflowResult.ok) {
     return workflowResult.response;
   }

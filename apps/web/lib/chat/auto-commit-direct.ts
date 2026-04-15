@@ -4,6 +4,7 @@ import { generateText } from "ai";
 import { getGitHubAccount } from "@/lib/db/accounts";
 import { buildGitHubAuthRemoteUrl } from "@/lib/github/repo-identifiers";
 import { getAppCoAuthorTrailer } from "@/lib/github/app-auth";
+import { withSessionGitMutation } from "@/lib/git/session-git-mutation";
 import { getUserGitHubToken } from "@/lib/github/user-token";
 import { DEFAULT_FAST_MODEL_ID } from "@/lib/models";
 
@@ -31,115 +32,139 @@ export interface AutoCommitResult {
 export async function performAutoCommit(
   params: AutoCommitParams,
 ): Promise<AutoCommitResult> {
-  const { sandbox, userId, sessionTitle, repoOwner, repoName } = params;
+  const { sandbox, userId, sessionId, sessionTitle, repoOwner, repoName } =
+    params;
   const cwd = sandbox.workingDirectory;
 
-  // 1. Check for uncommitted changes
-  const statusResult = await sandbox.exec("git status --porcelain", cwd, 10000);
-  if (!statusResult.success || !statusResult.stdout.trim()) {
-    return { committed: false, pushed: false };
-  }
+  return withSessionGitMutation(
+    {
+      sessionId,
+      leaseType: "auto-commit",
+      sandbox,
+      busyMessage:
+        "Another git write is already running for this session, so auto-commit was skipped.",
+    },
+    async () => {
+      // 1. Check for uncommitted changes
+      const statusResult = await sandbox.exec(
+        "git status --porcelain",
+        cwd,
+        10000,
+      );
+      if (!statusResult.success || !statusResult.stdout.trim()) {
+        return { committed: false, pushed: false };
+      }
 
-  // 2. Set up auth on the remote
-  const repoToken = await getUserGitHubToken(userId);
+      // 2. Set up auth on the remote
+      const repoToken = await getUserGitHubToken(userId);
 
-  if (repoToken) {
-    const authUrl = buildGitHubAuthRemoteUrl({
-      token: repoToken,
-      owner: repoOwner,
-      repo: repoName,
-    });
+      if (repoToken) {
+        const authUrl = buildGitHubAuthRemoteUrl({
+          token: repoToken,
+          owner: repoOwner,
+          repo: repoName,
+        });
 
-    if (authUrl) {
-      await sandbox.exec(`git remote set-url origin "${authUrl}"`, cwd, 10000);
-    }
-  }
+        if (authUrl) {
+          await sandbox.exec(
+            `git remote set-url origin "${authUrl}"`,
+            cwd,
+            10000,
+          );
+        }
+      }
 
-  // 3. Stage all changes
-  const addResult = await sandbox.exec("git add -A", cwd, 10000);
-  if (!addResult.success) {
-    return {
-      committed: false,
-      pushed: false,
-      error: "Failed to stage changes",
-    };
-  }
+      // 3. Stage all changes
+      const addResult = await sandbox.exec("git add -A", cwd, 10000);
+      if (!addResult.success) {
+        return {
+          committed: false,
+          pushed: false,
+          error: "Failed to stage changes",
+        };
+      }
 
-  // 4. Generate commit message
-  const commitMessage = await generateCommitMessage(sandbox, cwd, sessionTitle);
+      // 4. Generate commit message
+      const commitMessage = await generateCommitMessage(
+        sandbox,
+        cwd,
+        sessionTitle,
+      );
 
-  // 5. Set git author identity
-  const githubAccount = await getGitHubAccount(userId);
-  if (githubAccount?.externalUserId && githubAccount.username) {
-    const userEmail = `${githubAccount.externalUserId}+${githubAccount.username}@users.noreply.github.com`;
-    await sandbox.exec(
-      `git config user.name '${githubAccount.username.replace(/'/g, "'\\''")}'`,
-      cwd,
-      5000,
-    );
-    await sandbox.exec(`git config user.email '${userEmail}'`, cwd, 5000);
-  }
+      // 5. Set git author identity
+      const githubAccount = await getGitHubAccount(userId);
+      if (githubAccount?.externalUserId && githubAccount.username) {
+        const userEmail = `${githubAccount.externalUserId}+${githubAccount.username}@users.noreply.github.com`;
+        await sandbox.exec(
+          `git config user.name '${githubAccount.username.replace(/'/g, "'\\''")}'`,
+          cwd,
+          5000,
+        );
+        await sandbox.exec(`git config user.email '${userEmail}'`, cwd, 5000);
+      }
 
-  // 6. Commit with Co-Authored-By trailer for the agent app
-  const escapedMessage = commitMessage.replace(/'/g, "'\\''");
-  const coAuthorTrailer = await getAppCoAuthorTrailer();
-  const trailerArg = coAuthorTrailer
-    ? ` -m '${coAuthorTrailer.replace(/'/g, "'\\''")}'`
-    : "";
-  const commitResult = await sandbox.exec(
-    `git commit -m '${escapedMessage}'${trailerArg}`,
-    cwd,
-    10000,
+      // 6. Commit with Co-Authored-By trailer for the agent app
+      const escapedMessage = commitMessage.replace(/'/g, "'\\''");
+      const coAuthorTrailer = await getAppCoAuthorTrailer();
+      const trailerArg = coAuthorTrailer
+        ? ` -m '${coAuthorTrailer.replace(/'/g, "'\\''")}'`
+        : "";
+      const commitResult = await sandbox.exec(
+        `git commit -m '${escapedMessage}'${trailerArg}`,
+        cwd,
+        10000,
+      );
+
+      if (!commitResult.success) {
+        return {
+          committed: false,
+          pushed: false,
+          error: `Failed to commit: ${commitResult.stdout}`,
+        };
+      }
+
+      const headResult = await sandbox.exec("git rev-parse HEAD", cwd, 5000);
+      const commitSha = headResult.stdout.trim() || undefined;
+
+      // 7. Push
+      const branchResult = await sandbox.exec(
+        "git symbolic-ref --short HEAD",
+        cwd,
+        5000,
+      );
+      const currentBranch = branchResult.stdout.trim() || "HEAD";
+
+      const pushResult = await sandbox.exec(
+        `GIT_TERMINAL_PROMPT=0 git push -u origin ${currentBranch}`,
+        cwd,
+        60000,
+      );
+
+      if (!pushResult.success) {
+        console.warn(
+          `[auto-commit] Push failed for session ${sessionId}: ${pushResult.stderr ?? pushResult.stdout}`,
+        );
+        return {
+          committed: true,
+          pushed: false,
+          commitMessage,
+          commitSha,
+          error: "Commit succeeded but push failed",
+        };
+      }
+
+      console.log(
+        `[auto-commit] Successfully committed and pushed for session ${sessionId}`,
+      );
+
+      return {
+        committed: true,
+        pushed: true,
+        commitMessage,
+        commitSha,
+      };
+    },
   );
-
-  if (!commitResult.success) {
-    return {
-      committed: false,
-      pushed: false,
-      error: `Failed to commit: ${commitResult.stdout}`,
-    };
-  }
-
-  const headResult = await sandbox.exec("git rev-parse HEAD", cwd, 5000);
-  const commitSha = headResult.stdout.trim() || undefined;
-
-  // 7. Push
-  const branchResult = await sandbox.exec(
-    "git symbolic-ref --short HEAD",
-    cwd,
-    5000,
-  );
-  const currentBranch = branchResult.stdout.trim() || "HEAD";
-
-  const pushResult = await sandbox.exec(
-    `GIT_TERMINAL_PROMPT=0 git push -u origin ${currentBranch}`,
-    cwd,
-    60000,
-  );
-
-  if (!pushResult.success) {
-    console.warn(
-      `[auto-commit] Push failed for session ${params.sessionId}: ${pushResult.stderr ?? pushResult.stdout}`,
-    );
-    return {
-      committed: true,
-      pushed: false,
-      commitMessage,
-      commitSha,
-      error: "Commit succeeded but push failed",
-    };
-  }
-
-  console.log(
-    `[auto-commit] Successfully committed and pushed for session ${params.sessionId}`,
-  );
-
-  return {
-    committed: true,
-    pushed: true,
-    commitMessage,
-    commitSha,
-  };
 }
 
 async function generateCommitMessage(

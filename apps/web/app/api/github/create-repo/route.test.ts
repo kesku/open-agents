@@ -48,6 +48,7 @@ let sessionRecord: SessionRecord | null;
 let githubAccount: GitHubAccount;
 let userToken: string | null;
 let sandboxActive: boolean;
+let hasActiveChatStreams: boolean;
 let workflowResult: WorkflowResult;
 
 mock.module("@/lib/session/get-server-session", () => ({
@@ -59,7 +60,10 @@ mock.module("@/lib/db/accounts", () => ({
 }));
 
 mock.module("@/lib/db/sessions", () => ({
+  claimSessionGitMutationLease: async () => true,
   getSessionById: async () => sessionRecord,
+  hasActiveChatStreamsInSession: async () => hasActiveChatStreams,
+  releaseSessionGitMutationLease: async () => true,
   updateSession: async (sessionId: string, patch: Record<string, unknown>) => {
     updateCalls.push({ sessionId, patch });
     if (sessionRecord) {
@@ -134,6 +138,7 @@ describe("/api/github/create-repo", () => {
     };
     userToken = "user-token";
     sandboxActive = true;
+    hasActiveChatStreams = false;
     workflowResult = {
       ok: true,
       repoUrl: "https://github.com/acme/repo-1",
@@ -174,6 +179,26 @@ describe("/api/github/create-repo", () => {
 
     expect(response.status).toBe(401);
     expect(await response.json()).toEqual({ error: "GitHub not connected" });
+    expect(workflowCalls).toHaveLength(0);
+  });
+
+  test("returns 409 when a chat in the session is still streaming", async () => {
+    hasActiveChatStreams = true;
+    const { POST } = await routeModulePromise;
+
+    const response = await POST(
+      createRequest({
+        sessionId: "session-1",
+        repoName: "repo-1",
+        sessionTitle: "Session",
+      }),
+    );
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({
+      error:
+        "Wait for the active agent run in this session to finish before creating a repository.",
+    });
     expect(workflowCalls).toHaveLength(0);
   });
 

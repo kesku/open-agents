@@ -50,6 +50,13 @@ mock.module("@/lib/github/user-token", () => ({
   getUserGitHubToken: async () => repoTokenResult.token,
 }));
 
+mock.module("@/lib/git/session-git-mutation", () => ({
+  withSessionGitMutation: async (
+    _params: Record<string, unknown>,
+    fn: () => Promise<unknown>,
+  ) => fn(),
+}));
+
 const { performAutoCommit } = await import("./auto-commit-direct");
 
 // ── Helpers ────────────────────────────────────────────────────────
