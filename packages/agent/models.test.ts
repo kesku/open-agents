@@ -19,6 +19,7 @@ mock.module("@ai-sdk/devtools", () => ({
 }));
 
 const {
+  getConfiguredProviderIds,
   getProviderOptionsForModel,
   mergeProviderOptions,
   shouldApplyOpenAIReasoningDefaults,
@@ -114,6 +115,12 @@ describe("getProviderOptionsForModel", () => {
       },
     });
   });
+
+  test("does not apply OpenAI Responses defaults to Perplexity-routed models", () => {
+    const result = getProviderOptionsForModel("perplexity/openai/gpt-5.4");
+
+    expect(result).toEqual({});
+  });
 });
 
 describe("mergeProviderOptions", () => {
@@ -196,5 +203,25 @@ describe("mergeProviderOptions", () => {
         include: ["reasoning.summary"],
       },
     });
+  });
+});
+
+describe("getConfiguredProviderIds", () => {
+  test("includes Perplexity only when a Perplexity key is configured", () => {
+    const originalPerplexityApiKey = process.env.PERPLEXITY_API_KEY;
+
+    try {
+      delete process.env.PERPLEXITY_API_KEY;
+      expect(getConfiguredProviderIds()).not.toContain("perplexity");
+
+      process.env.PERPLEXITY_API_KEY = "test-perplexity-key";
+      expect(getConfiguredProviderIds()).toContain("perplexity");
+    } finally {
+      if (originalPerplexityApiKey === undefined) {
+        delete process.env.PERPLEXITY_API_KEY;
+      } else {
+        process.env.PERPLEXITY_API_KEY = originalPerplexityApiKey;
+      }
+    }
   });
 });

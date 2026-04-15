@@ -51,6 +51,7 @@ This env script provides values for:
 - local auth config
 - optional local GitHub config
 - OpenAI provider config
+- optional Perplexity provider config
 - Proxmox pool configuration
 - SSH key path for sandbox node access
 
@@ -157,7 +158,8 @@ curl "http://192.168.1.141:3000/api/sandbox/status?sessionId=SESSION_ID"
 Currently I got working:
 
 - single-user local auth
-- direct OpenAI model provider
+- direct OpenAI model provider with dynamic `/v1/models` discovery
+- optional Perplexity provider via `PERPLEXITY_API_KEY` (we have a good agent api)
 - fixed 4-node Proxmox LXC pool
 - hard reset on sandbox release
 - local env-backed GitHub mode

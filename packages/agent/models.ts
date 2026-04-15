@@ -17,6 +17,7 @@ import {
 
 const defaultOpenAIProvider = createOpenAI();
 const defaultAnthropicProvider = createAnthropic();
+const DEFAULT_PERPLEXITY_BASE_URL = "https://api.perplexity.ai/v1";
 
 // Kept as a compatibility alias for existing call sites. Model ids are now
 // resolved directly through the provider registry instead of AI Gateway.
@@ -174,6 +175,17 @@ function hasEnv(name: string): boolean {
   return typeof value === "string" && value.trim().length > 0;
 }
 
+function getRequiredPerplexityApiKey(): string {
+  const apiKey = process.env.PERPLEXITY_API_KEY?.trim();
+  if (!apiKey) {
+    throw new Error(
+      "PERPLEXITY_API_KEY is required to use the Perplexity model provider.",
+    );
+  }
+
+  return apiKey;
+}
+
 export function getConfiguredProviderIds(): string[] {
   const configuredProviders: string[] = [];
 
@@ -191,6 +203,10 @@ export function getConfiguredProviderIds(): string[] {
     hasEnv("ANTHROPIC_BASE_URL")
   ) {
     configuredProviders.push("anthropic");
+  }
+
+  if (hasEnv("PERPLEXITY_API_KEY")) {
+    configuredProviders.push("perplexity");
   }
 
   return configuredProviders;
@@ -236,6 +252,19 @@ function createProviderModel(
           baseURL: config.baseURL,
         })
       : defaultAnthropicProvider;
+
+    return provider(providerModelId);
+  }
+
+  if (providerId === "perplexity") {
+    const provider = createOpenAI({
+      apiKey: config?.apiKey ?? getRequiredPerplexityApiKey(),
+      baseURL:
+        config?.baseURL ??
+        process.env.PERPLEXITY_BASE_URL ??
+        DEFAULT_PERPLEXITY_BASE_URL,
+      name: "perplexity",
+    });
 
     return provider(providerModelId);
   }

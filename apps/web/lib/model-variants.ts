@@ -98,11 +98,24 @@ function withVariantProviderDefaults(
   };
 }
 
+function getProviderOptionsProvider(baseModelId: string): string | undefined {
+  const provider = baseModelId.split("/")[0];
+  if (!provider) {
+    return undefined;
+  }
+
+  if (provider === "perplexity") {
+    return "openai";
+  }
+
+  return provider;
+}
+
 export function toProviderOptionsByProvider(
   baseModelId: string,
   providerOptions: Record<string, JsonValue>,
 ): ProviderOptionsByProvider | undefined {
-  const provider = baseModelId.split("/")[0];
+  const provider = getProviderOptionsProvider(baseModelId);
   if (!provider) {
     return undefined;
   }
@@ -167,14 +180,6 @@ export const BUILT_IN_VARIANTS: ModelVariant[] = [
     providerOptions: {
       reasoningEffort: "xhigh",
       reasoningSummary: "auto",
-    },
-  },
-  {
-    id: `${BUILT_IN_VARIANT_ID_PREFIX}claude-opus-4.6-high`,
-    name: "Claude Opus 4.6 (High)",
-    baseModelId: "anthropic/claude-opus-4.6",
-    providerOptions: {
-      effort: "high",
     },
   },
 ];

@@ -120,9 +120,9 @@ describe("/api/settings/model-variants", () => {
     expect(response.ok).toBe(true);
 
     const body = (await response.json()) as { modelVariants: ModelVariant[] };
-    expect(body.modelVariants).toHaveLength(3);
-    expect(body.modelVariants[2]?.id.startsWith("variant:")).toBe(true);
-    expect(body.modelVariants[2]?.name).toBe("OpenAI Medium");
+    expect(body.modelVariants).toHaveLength(2);
+    expect(body.modelVariants[1]?.id.startsWith("variant:")).toBe(true);
+    expect(body.modelVariants[1]?.name).toBe("OpenAI Medium");
   });
 
   test("POST accepts provider options exactly at 16KB", async () => {
@@ -251,7 +251,7 @@ describe("/api/settings/model-variants", () => {
     expect(response.ok).toBe(true);
 
     const body = (await response.json()) as { modelVariants: ModelVariant[] };
-    expect(body.modelVariants[2]?.providerOptions).toEqual({
+    expect(body.modelVariants[1]?.providerOptions).toEqual({
       reasoningEffort: "high",
     });
   });
@@ -333,6 +333,6 @@ describe("/api/settings/model-variants", () => {
     expect(response.ok).toBe(true);
 
     const body = (await response.json()) as { modelVariants: ModelVariant[] };
-    expect(body.modelVariants).toHaveLength(2);
+    expect(body.modelVariants).toHaveLength(1);
   });
 });

@@ -1,11 +1,10 @@
 import "server-only";
 
-import { filterDisabledModels } from "./model-availability";
 import {
+  clearModelCatalogCacheForTests,
   getAvailableLanguageModelsFromCatalog,
-  type AvailableModel,
-  type AvailableModelCost,
-} from "./models";
+} from "./model-catalog";
+import { type AvailableModel, type AvailableModelCost } from "./models";
 
 const MODELS_DEV_URL = "https://models.dev/api.json";
 const MODELS_DEV_TIMEOUT_MS = 750;
@@ -148,7 +147,11 @@ function addModelsDevMetadata(
   model: AvailableModel,
   metadataMap: Map<string, ModelsDevMetadata>,
 ): AvailableModel {
-  const metadata = metadataMap.get(model.id);
+  const metadata =
+    metadataMap.get(model.id) ??
+    (model.provider === "perplexity"
+      ? metadataMap.get(model.id.slice("perplexity/".length))
+      : undefined);
   if (!metadata) {
     return model;
   }
@@ -172,7 +175,7 @@ function addModelsDevMetadata(
 export async function fetchAvailableLanguageModels(): Promise<
   AvailableModel[]
 > {
-  return filterDisabledModels(getAvailableLanguageModelsFromCatalog());
+  return getAvailableLanguageModelsFromCatalog();
 }
 
 export async function fetchAvailableLanguageModelsWithContext(): Promise<
@@ -187,3 +190,6 @@ export async function fetchAvailableLanguageModelsWithContext(): Promise<
     addModelsDevMetadata(model, modelsDevMetadataMap),
   );
 }
+
+export const clearAvailableLanguageModelsCacheForTests =
+  clearModelCatalogCacheForTests;

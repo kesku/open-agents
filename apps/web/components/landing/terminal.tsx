@@ -10,8 +10,8 @@ const scenes: readonly Scene[] = [
   {
     name: "agent",
     data: [
-      { tone: "muted", text: "> build the auth flow with github oauth" },
-      { tone: "dim", text: "anthropic/claude-opus-4.6" },
+      { tone: "muted", text: "> wire local github token support" },
+      { tone: "dim", text: "openai/gpt-5.4" },
       { tone: "plain", text: "" },
       { tone: "ok", text: "searching files matching auth*" },
       { tone: "ok", text: "reading lib/session.ts (142 lines)" },
@@ -29,7 +29,7 @@ const scenes: readonly Scene[] = [
     name: "sandbox",
     data: [
       { tone: "muted", text: "> refactor the api to use edge runtime" },
-      { tone: "dim", text: "sandbox: vercel (feat/edge-api)" },
+      { tone: "dim", text: "sandbox: proxmox-lxc (feat/local-runtime)" },
       { tone: "plain", text: "" },
       { tone: "ok", text: "reading app/api/chat/route.ts" },
       { tone: "ok", text: "reading app/api/chat/[chatId]/stream/route.ts" },
