@@ -15,6 +15,7 @@ import {
 } from "@/lib/model-options";
 import { getAllVariants } from "@/lib/model-variants";
 import { fetchAvailableLanguageModelsWithContext } from "@/lib/models-with-context";
+import { isClientGeneratedId } from "@/lib/client-id";
 import { getServerSession } from "@/lib/session/get-server-session";
 import { getInitialIsOnlyChatInSession } from "./only-chat-in-session";
 import { SessionChatContent } from "./session-chat-content";
@@ -29,9 +30,7 @@ function sleep(ms: number): Promise<void> {
 }
 
 function isOptimisticChatId(chatId: string): boolean {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-    chatId,
-  );
+  return isClientGeneratedId(chatId, "chat");
 }
 
 const OPTIMISTIC_CHAT_RETRY_DELAY_MS = 100;

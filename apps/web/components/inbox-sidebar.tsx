@@ -11,6 +11,7 @@ import {
   Monitor,
   Pencil,
   Plus,
+  RotateCcw,
   ServerCog,
   Settings,
 } from "lucide-react";
@@ -55,6 +56,7 @@ type InboxSidebarProps = {
   onSessionPrefetch: (session: SessionWithUnread) => void;
   onRenameSession?: (sessionId: string, title: string) => Promise<void>;
   onArchiveSession: (sessionId: string) => Promise<void>;
+  onUnarchiveSession: (sessionId: string) => Promise<void>;
   onOpenNewSession: () => void;
   onCreateSessionForRepo: (repoOwner: string, repoName: string) => void;
   onCreateSessionFromBranch: (
@@ -326,6 +328,7 @@ type SessionRowProps = {
   onSessionPrefetch: (session: SessionWithUnread) => void;
   onRenameSession?: (sessionId: string, title: string) => Promise<void>;
   onArchiveSession: (session: SessionWithUnread) => void;
+  onUnarchiveSession: (session: SessionWithUnread) => void;
 };
 
 const SessionRow = memo(function SessionRow({
@@ -336,6 +339,7 @@ const SessionRow = memo(function SessionRow({
   onSessionPrefetch,
   onRenameSession,
   onArchiveSession,
+  onUnarchiveSession,
 }: SessionRowProps) {
   const isMobile = useIsMobile();
   const [isHovered, setIsHovered] = useState(false);
@@ -364,7 +368,10 @@ const SessionRow = memo(function SessionRow({
 
   const hasDiff = session.linesAdded !== null || session.linesRemoved !== null;
   const showActionButtons =
-    isHovered && (Boolean(onRenameSession) || session.status !== "archived");
+    isHovered &&
+    (Boolean(onRenameSession) ||
+      Boolean(onUnarchiveSession) ||
+      session.status !== "archived");
 
   const handleMouseEnter = useCallback(() => {
     if (leaveTimeoutRef.current) {
@@ -545,7 +552,26 @@ const SessionRow = memo(function SessionRow({
                   Archive session
                 </TooltipContent>
               </Tooltip>
-            ) : null}
+            ) : (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    className="rounded p-0.5 text-muted-foreground/60 transition-colors hover:text-muted-foreground"
+                    aria-label="Restore session"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onUnarchiveSession(session);
+                    }}
+                  >
+                    <RotateCcw className="h-3.5 w-3.5" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="top" sideOffset={4}>
+                  Restore session
+                </TooltipContent>
+              </Tooltip>
+            )}
           </>
         ) : hasDiff ? (
           <DiffStats
@@ -618,6 +644,7 @@ export function InboxSidebar({
   onSessionPrefetch,
   onRenameSession,
   onArchiveSession,
+  onUnarchiveSession,
   onOpenNewSession,
   onCreateSessionForRepo,
   onCreateSessionFromBranch,
@@ -788,6 +815,22 @@ export function InboxSidebar({
   const handleArchiveSession = useCallback((session: SessionWithUnread) => {
     setArchiveConfirmSession(session);
   }, []);
+
+  const handleUnarchiveSession = useCallback(
+    async (session: SessionWithUnread) => {
+      try {
+        await onUnarchiveSession(session.id);
+        setArchivedSessions((current) =>
+          current.filter(
+            (existingSession) => existingSession.id !== session.id,
+          ),
+        );
+      } catch (err) {
+        console.error("Failed to unarchive session:", err);
+      }
+    },
+    [onUnarchiveSession],
+  );
 
   const handleConfirmArchive = useCallback(async () => {
     if (!archiveConfirmSession) return;
@@ -1070,6 +1113,7 @@ export function InboxSidebar({
                               onSessionPrefetch={handleSessionPrefetch}
                               onRenameSession={onRenameSession}
                               onArchiveSession={handleArchiveSession}
+                              onUnarchiveSession={handleUnarchiveSession}
                             />
                           ))}
                         </div>

@@ -407,12 +407,123 @@ export async function deleteSession(sessionId: string) {
   await db.delete(sessions).where(eq(sessions.id, sessionId));
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function cloneChatMessageWithId(message: unknown, id: string): unknown {
+  const clonedMessage = structuredClone(message);
+  if (!isRecord(clonedMessage)) {
+    return clonedMessage;
+  }
+
+  return {
+    ...clonedMessage,
+    id,
+  };
+}
+
 export async function createChat(data: NewChat) {
   const [chat] = await db.insert(chats).values(data).returning();
   if (!chat) {
     throw new Error("Failed to create chat");
   }
   return chat;
+}
+
+type ForkChatThroughMessageInput = {
+  userId: string;
+  sourceChatId: string;
+  throughMessageId: string;
+  forkedChat: Pick<NewChat, "id" | "sessionId" | "title" | "modelId">;
+};
+
+type ForkChatThroughMessageResult =
+  | { status: "created"; chat: typeof chats.$inferSelect }
+  | { status: "message_not_found" }
+  | { status: "not_assistant_message" };
+
+export async function forkChatThroughMessage(
+  input: ForkChatThroughMessageInput,
+): Promise<ForkChatThroughMessageResult> {
+  return db.transaction(async (tx) => {
+    const sourceMessages = await tx
+      .select({
+        id: chatMessages.id,
+        role: chatMessages.role,
+        parts: chatMessages.parts,
+        createdAt: chatMessages.createdAt,
+      })
+      .from(chatMessages)
+      .where(eq(chatMessages.chatId, input.sourceChatId))
+      .orderBy(chatMessages.createdAt, chatMessages.id);
+
+    const throughMessageIndex = sourceMessages.findIndex(
+      (message) => message.id === input.throughMessageId,
+    );
+    if (throughMessageIndex < 0) {
+      return { status: "message_not_found" };
+    }
+
+    const throughMessage = sourceMessages[throughMessageIndex];
+    if (!throughMessage || throughMessage.role !== "assistant") {
+      return { status: "not_assistant_message" };
+    }
+
+    const now = new Date();
+    const [forkedChat] = await tx
+      .insert(chats)
+      .values({
+        ...input.forkedChat,
+        activeStreamId: null,
+        lastAssistantMessageAt: throughMessage.createdAt,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .returning();
+
+    if (!forkedChat) {
+      throw new Error("Failed to create forked chat");
+    }
+
+    const messagesToCopy = sourceMessages.slice(0, throughMessageIndex + 1);
+    if (messagesToCopy.length > 0) {
+      await tx.insert(chatMessages).values(
+        messagesToCopy.map((message) => {
+          const forkedMessageId = crypto.randomUUID();
+          return {
+            id: forkedMessageId,
+            chatId: forkedChat.id,
+            role: message.role,
+            parts: cloneChatMessageWithId(message.parts, forkedMessageId),
+            createdAt: message.createdAt,
+          };
+        }),
+      );
+    }
+
+    await tx
+      .insert(chatReads)
+      .values({
+        userId: input.userId,
+        chatId: forkedChat.id,
+        lastReadAt: now,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .onConflictDoUpdate({
+        target: [chatReads.userId, chatReads.chatId],
+        set: {
+          lastReadAt: now,
+          updatedAt: now,
+        },
+      });
+
+    return {
+      status: "created",
+      chat: forkedChat,
+    };
+  });
 }
 
 export async function getChatById(chatId: string) {
