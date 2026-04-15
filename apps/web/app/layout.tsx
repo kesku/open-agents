@@ -45,6 +45,7 @@ const metadataBase = process.env.VERCEL_PROJECT_PRODUCTION_URL
   : process.env.VERCEL_URL
     ? new URL(`https://${process.env.VERCEL_URL}`)
     : new URL("https://open-agents.dev");
+const shouldRenderVercelAnalytics = process.env.VERCEL === "1";
 
 export const metadata: Metadata = {
   metadataBase,
@@ -77,7 +78,7 @@ export default function RootLayout({
           dangerouslySetInnerHTML={{ __html: themeInitializationScript }}
         />
         <Providers>{children}</Providers>
-        <Analytics />
+        {shouldRenderVercelAnalytics ? <Analytics /> : null}
       </body>
     </html>
   );

@@ -238,6 +238,7 @@ function InlineCommitPanel({
   onCommitted,
   isAgentWorking,
   baseBranch,
+  isLoadingBaseBranch,
 }: {
   session: Session;
   hasSandbox: boolean;
@@ -246,6 +247,7 @@ function InlineCommitPanel({
   onCommitted?: () => void;
   isAgentWorking: boolean;
   baseBranch: string;
+  isLoadingBaseBranch: boolean;
 }) {
   const [commitMessage, setCommitMessage] = useState("");
   const [isCommitting, setIsCommitting] = useState(false);
@@ -390,7 +392,12 @@ function InlineCommitPanel({
           size="sm"
           className="w-full text-xs"
           onClick={() => void handleCreateBranch()}
-          disabled={isAgentWorking || isCreatingBranch || !hasSandbox}
+          disabled={
+            isAgentWorking ||
+            isCreatingBranch ||
+            !hasSandbox ||
+            isLoadingBaseBranch
+          }
         >
           {isCreatingBranch ? (
             <>
@@ -419,7 +426,11 @@ function InlineCommitPanel({
   }
 
   const commitDisabled =
-    isAgentWorking || isCommitting || !hasSandbox || !hasPendingGitWork;
+    isAgentWorking ||
+    isCommitting ||
+    !hasSandbox ||
+    !hasPendingGitWork ||
+    isLoadingBaseBranch;
 
   // Commit form
   const commitForm = (
@@ -522,9 +533,11 @@ function InlineCommitPanel({
 
   const disabledTooltip = isAgentWorking
     ? "Wait for the agent to finish"
-    : !hasSandbox
-      ? "Waiting for sandbox to start"
-      : null;
+    : isLoadingBaseBranch
+      ? "Loading repository branches"
+      : !hasSandbox
+        ? "Waiting for sandbox to start"
+        : null;
 
   if (disabledTooltip) {
     return (
@@ -554,6 +567,7 @@ function InlinePrCreatePanel({
   onGitMessage,
   isAgentWorking,
   baseBranch,
+  isLoadingBaseBranch,
 }: {
   session: Session;
   hasSandbox: boolean;
@@ -567,6 +581,7 @@ function InlinePrCreatePanel({
   onGitMessage?: (message: WebAgentUIMessage) => Promise<void> | void;
   isAgentWorking: boolean;
   baseBranch: string;
+  isLoadingBaseBranch: boolean;
 }) {
   const [prTitle, setPrTitle] = useState("");
   const [prBody, setPrBody] = useState("");
@@ -876,9 +891,11 @@ function InlinePrCreatePanel({
   if (needsNewBranch) {
     const branchDisabledTooltip = isAgentWorking
       ? "Wait for the agent to finish"
-      : !hasSandbox
-        ? "Waiting for sandbox to start"
-        : null;
+      : isLoadingBaseBranch
+        ? "Loading repository branches"
+        : !hasSandbox
+          ? "Waiting for sandbox to start"
+          : null;
 
     const branchContent = (
       <div className="space-y-2">
@@ -891,7 +908,12 @@ function InlinePrCreatePanel({
           size="sm"
           className="w-full text-xs"
           onClick={() => void handleCreateBranch()}
-          disabled={isAgentWorking || isCreatingBranch || !hasSandbox}
+          disabled={
+            isAgentWorking ||
+            isCreatingBranch ||
+            !hasSandbox ||
+            isLoadingBaseBranch
+          }
         >
           {isCreatingBranch ? (
             <>
@@ -936,13 +958,16 @@ function InlinePrCreatePanel({
     );
   }
 
-  const prDisabled = isAgentWorking || isCreatingPr || !hasSandbox;
+  const prDisabled =
+    isAgentWorking || isCreatingPr || !hasSandbox || isLoadingBaseBranch;
 
   const prDisabledTooltip = isAgentWorking
     ? "Wait for the agent to finish"
-    : !hasSandbox
-      ? "Waiting for sandbox to start"
-      : null;
+    : isLoadingBaseBranch
+      ? "Loading repository branches"
+      : !hasSandbox
+        ? "Waiting for sandbox to start"
+        : null;
 
   // PR creation form
   const prForm = (
@@ -1649,6 +1674,7 @@ export function GitPanel(props: GitPanelProps) {
     isAgentWorking,
   } = props;
   const [baseBranch, setBaseBranch] = useState("main");
+  const [isLoadingBaseBranch, setIsLoadingBaseBranch] = useState(false);
 
   useEffect(() => {
     if (!session.repoOwner || !session.repoName) {
@@ -1656,14 +1682,20 @@ export function GitPanel(props: GitPanelProps) {
     }
 
     let cancelled = false;
+    setIsLoadingBaseBranch(true);
 
     void fetchRepoBranches(session.repoOwner, session.repoName)
       .then((data) => {
         if (!cancelled) {
           setBaseBranch(data.defaultBranch);
+          setIsLoadingBaseBranch(false);
         }
       })
-      .catch(() => {});
+      .catch(() => {
+        if (!cancelled) {
+          setIsLoadingBaseBranch(false);
+        }
+      });
 
     return () => {
       cancelled = true;
@@ -1882,6 +1914,7 @@ export function GitPanel(props: GitPanelProps) {
                     onCommitted={onCommitted}
                     isAgentWorking={isAgentWorking}
                     baseBranch={baseBranch}
+                    isLoadingBaseBranch={isLoadingBaseBranch}
                   />
                 </div>
               )}
@@ -2030,6 +2063,7 @@ export function GitPanel(props: GitPanelProps) {
                 onGitMessage={onGitMessage}
                 isAgentWorking={isAgentWorking}
                 baseBranch={baseBranch}
+                isLoadingBaseBranch={isLoadingBaseBranch}
               />
             ) : (
               <div className="text-center text-xs text-muted-foreground py-6">

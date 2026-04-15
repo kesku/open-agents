@@ -329,10 +329,10 @@ export class ProxmoxLxcSandbox implements Sandbox {
     command: string,
     cwd: string,
   ): Promise<{ commandId: string }> {
+    const logPath = `/tmp/open-harness-detached/${Date.now()}.log`;
     const detachedCommand = [
       `mkdir -p /tmp/open-harness-detached`,
-      `nohup sh -lc ${shellEscape(command)} >/tmp/open-harness-detached/${Date.now()}.log 2>&1 < /dev/null &`,
-      "echo $!",
+      `(nohup sh -lc ${shellEscape(command)} >${shellEscape(logPath)} 2>&1 < /dev/null & echo $!)`,
     ].join(" && ");
 
     const result = await this.execRawRemoteCommand(detachedCommand, {

@@ -122,6 +122,8 @@ export function CreatePRDialog({
   const [prCreationMode, setPrCreationMode] = useState<PrCreationMode>("ready");
   const [enableAutoMerge, setEnableAutoMerge] = useState(false);
   const isDraft = prCreationMode === "draft";
+  const isBaseBranchReady =
+    !session.repoOwner || !session.repoName || !isLoadingBranches;
 
   // Reset state when dialog opens
   useEffect(() => {
@@ -444,7 +446,11 @@ export function CreatePRDialog({
   };
 
   const isDisabled =
-    isGenerating || isCreating || isCreatingBranch || isCheckingStatus;
+    isGenerating ||
+    isCreating ||
+    isCreatingBranch ||
+    isCheckingStatus ||
+    !isBaseBranchReady;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -650,6 +656,11 @@ export function CreatePRDialog({
               {error && (
                 <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
                   {error}
+                </div>
+              )}
+              {!isBaseBranchReady && (
+                <div className="rounded-md border border-border bg-muted/40 p-3 text-sm text-muted-foreground">
+                  Loading repository branches...
                 </div>
               )}
             </div>

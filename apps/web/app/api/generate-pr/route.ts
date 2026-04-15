@@ -18,6 +18,7 @@ import {
   hasActiveChatStreamsInSession,
   updateSession,
 } from "@/lib/db/sessions";
+import { resolveGitHubBaseBranch } from "@/lib/github/base-branch";
 import { buildGitHubAuthRemoteUrl } from "@/lib/github/repo-identifiers";
 import {
   SessionGitMutationBusyError,
@@ -119,6 +120,7 @@ export async function POST(req: Request) {
   const sandbox = await connectSandbox(sessionRecord.sandboxState);
   const cwd = sandbox.workingDirectory;
   let userToken: string | null = null;
+  let effectiveBaseBranch = baseBranch;
   try {
     return await withSessionGitMutation(
       {
@@ -137,6 +139,13 @@ export async function POST(req: Request) {
               { status: 403 },
             );
           }
+
+          effectiveBaseBranch = await resolveGitHubBaseBranch({
+            owner: sessionRecord.repoOwner,
+            repo: sessionRecord.repoName,
+            token: userToken,
+            requestedBranch: baseBranch,
+          });
 
           const authUrl = buildGitHubAuthRemoteUrl({
             token: userToken,
@@ -157,7 +166,8 @@ export async function POST(req: Request) {
         }
 
         // 3a. Resolve live branch from sandbox
-        let resolvedBranch = branchName === "HEAD" ? baseBranch : branchName;
+        let resolvedBranch =
+          branchName === "HEAD" ? effectiveBaseBranch : branchName;
         const branchResult = await sandbox.exec(
           "git symbolic-ref --short HEAD",
           cwd,
@@ -171,7 +181,7 @@ export async function POST(req: Request) {
         // 3b. Fetch latest from origin to ensure we have up-to-date refs
         // Explicitly fetch the base branch to ensure we have the ref
         const fetchResult = await sandbox.exec(
-          `git fetch origin ${baseBranch}:refs/remotes/origin/${baseBranch}`,
+          `git fetch origin ${effectiveBaseBranch}:refs/remotes/origin/${effectiveBaseBranch}`,
           cwd,
           30000,
         );
@@ -189,7 +199,7 @@ export async function POST(req: Request) {
 
         // Debug: log initial state
         console.log(
-          `[generate-pr] Initial state - branch: ${resolvedBranch}, baseBranch: ${baseBranch}, uncommitted: ${hasUncommittedChanges}`,
+          `[generate-pr] Initial state - branch: ${resolvedBranch}, baseBranch: ${effectiveBaseBranch}, uncommitted: ${hasUncommittedChanges}`,
         );
         console.log(
           `[generate-pr] Status output: "${statusResult.stdout.trim()}"`,
@@ -197,30 +207,30 @@ export async function POST(req: Request) {
 
         // 3d. Determine baseRef - prefer origin/<base> for accurate comparison
         // Try multiple methods to find the remote base ref
-        let baseRef = baseBranch;
+        let baseRef = effectiveBaseBranch;
 
         // Method 1: Check if origin/<base> exists via rev-parse (more reliable than show-ref)
         const originRefCheck = await sandbox.exec(
-          `git rev-parse --verify origin/${baseBranch}`,
+          `git rev-parse --verify origin/${effectiveBaseBranch}`,
           cwd,
           10000,
         );
         if (originRefCheck.success && originRefCheck.stdout.trim()) {
-          baseRef = `origin/${baseBranch}`;
+          baseRef = `origin/${effectiveBaseBranch}`;
           console.log(
-            `[generate-pr] Found origin/${baseBranch} at ${originRefCheck.stdout.trim().slice(0, 8)}`,
+            `[generate-pr] Found origin/${effectiveBaseBranch} at ${originRefCheck.stdout.trim().slice(0, 8)}`,
           );
         } else {
           // Method 2: Check if local base branch exists
           const localRefCheck = await sandbox.exec(
-            `git rev-parse --verify ${baseBranch}`,
+            `git rev-parse --verify ${effectiveBaseBranch}`,
             cwd,
             10000,
           );
           if (localRefCheck.success && localRefCheck.stdout.trim()) {
-            baseRef = baseBranch;
+            baseRef = effectiveBaseBranch;
             console.log(
-              `[generate-pr] Found local ${baseBranch} at ${localRefCheck.stdout.trim().slice(0, 8)}`,
+              `[generate-pr] Found local ${effectiveBaseBranch} at ${localRefCheck.stdout.trim().slice(0, 8)}`,
             );
           } else {
             // Method 3: List available remote refs for debugging
@@ -246,7 +256,7 @@ export async function POST(req: Request) {
               );
             } else {
               console.log(
-                `[generate-pr] WARNING: Could not find base ref ${baseBranch} locally or on origin`,
+                `[generate-pr] WARNING: Could not find base ref ${effectiveBaseBranch} locally or on origin`,
               );
             }
           }
@@ -265,10 +275,11 @@ export async function POST(req: Request) {
 
         // Need to create branch if on base branch OR if branch name looks like a commit hash (detached HEAD)
         const isDetachedOrOnBase =
-          resolvedBranch === baseBranch || looksLikeCommitHash(resolvedBranch);
+          resolvedBranch === effectiveBaseBranch ||
+          looksLikeCommitHash(resolvedBranch);
 
         console.log(
-          `[generate-pr] isDetachedOrOnBase: ${isDetachedOrOnBase} (resolved: ${resolvedBranch}, base: ${baseBranch})`,
+          `[generate-pr] isDetachedOrOnBase: ${isDetachedOrOnBase} (resolved: ${resolvedBranch}, base: ${effectiveBaseBranch})`,
         );
 
         const shouldCreateBranch =
@@ -668,7 +679,7 @@ Respond with ONLY the commit message, nothing else.`,
           sandbox,
           sessionId,
           sessionTitle,
-          baseBranch,
+          baseBranch: effectiveBaseBranch,
           branchName: resolvedBranch,
           baseRef,
           appBaseUrl: new URL(req.url).origin,

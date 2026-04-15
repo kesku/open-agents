@@ -4,6 +4,7 @@ import {
   enablePullRequestAutoMerge,
   parseGitHubUrl,
 } from "@/lib/github/client";
+import { resolveGitHubBaseBranch } from "@/lib/github/base-branch";
 import { getUserGitHubToken } from "@/lib/github/user-token";
 import { getServerSession } from "@/lib/session/get-server-session";
 
@@ -143,6 +144,13 @@ export async function POST(req: Request) {
     );
   }
 
+  const effectiveBaseBranch = await resolveGitHubBaseBranch({
+    owner: parsedRepoUrl.owner,
+    repo: parsedRepoUrl.repo,
+    token: userToken,
+    requestedBranch: baseBranch,
+  });
+
   let headRef = resolvedBranch;
   const normalizedBaseOwner = parsedRepoUrl.owner.toLowerCase();
   const normalizedHeadOwner = headOwner?.trim().toLowerCase();
@@ -159,7 +167,7 @@ export async function POST(req: Request) {
     headRef,
     title,
     body: prBody || "",
-    baseBranch,
+    baseBranch: effectiveBaseBranch,
     isDraft,
     token: tokenUsedForCreation,
   });
@@ -171,7 +179,7 @@ export async function POST(req: Request) {
       const compareUrl = buildGitHubCompareUrl({
         owner: parsedRepoUrl.owner,
         repo: parsedRepoUrl.repo,
-        baseBranch,
+        baseBranch: effectiveBaseBranch,
         headRef,
         title,
         body: prBody,

@@ -38,6 +38,7 @@ let enableAutoMergeResult: EnableAutoMergeResult = {
   mergeMethod: "squash",
 };
 let userToken: string | null = "user-token";
+let resolvedBaseBranch = "main";
 
 const createCalls: Array<Record<string, unknown>> = [];
 const autoMergeCalls: Array<Record<string, unknown>> = [];
@@ -79,6 +80,10 @@ function registerRouteMocks() {
     getUserGitHubToken: async () => userToken,
   }));
 
+  mock.module("@/lib/github/base-branch", () => ({
+    resolveGitHubBaseBranch: async () => resolvedBaseBranch,
+  }));
+
   mock.module("@/lib/github/client", () => ({
     parseGitHubUrl,
     createPullRequest: async (input: Record<string, unknown>) => {
@@ -117,6 +122,7 @@ describe("/api/pr", () => {
       mergeMethod: "squash",
     };
     userToken = "user-token";
+    resolvedBaseBranch = "main";
     createCalls.length = 0;
     autoMergeCalls.length = 0;
     updateCalls.length = 0;
