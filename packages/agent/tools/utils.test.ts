@@ -63,6 +63,7 @@ describe("tools/utils", () => {
         sandbox: {
           state: { type: "vercel", sandboxId: "sbx-456" },
           workingDirectory: "/repo",
+          githubToken: "gh-token",
         },
         model: "test-model",
       },
@@ -71,7 +72,7 @@ describe("tools/utils", () => {
 
     expect(sandbox.workingDirectory).toBe("/repo");
     expect(connectSandboxCalls).toEqual([
-      [{ type: "vercel", sandboxId: "sbx-456" }],
+      [{ type: "vercel", sandboxId: "sbx-456" }, { githubToken: "gh-token" }],
     ]);
   });
 

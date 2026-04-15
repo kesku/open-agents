@@ -550,13 +550,15 @@ function buildRemoteShellCommand(params: {
   cwd: string;
   env?: Record<string, string>;
 }): string {
-  const envPrefix = Object.entries(params.env ?? {})
+  const exportCommand = Object.entries(params.env ?? {})
     .map(([key, value]) => `${key}=${shellEscape(value)}`)
     .join(" ");
   const cwdPrefix = `cd ${shellEscape(params.cwd)}`;
   const commandBody = [cwdPrefix, params.command].join(" && ");
   const bodyWithEnv =
-    envPrefix.length > 0 ? `${envPrefix} ${commandBody}` : commandBody;
+    exportCommand.length > 0
+      ? `export ${exportCommand}; ${commandBody}`
+      : commandBody;
 
   return `sh -lc ${shellEscape(bodyWithEnv)}`;
 }

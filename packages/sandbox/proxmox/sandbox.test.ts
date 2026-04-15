@@ -76,3 +76,32 @@ describe("ProxmoxLxcSandbox.environmentDetails", () => {
     expect(sandbox.environmentDetails).toContain("Prefer `gh`");
   });
 });
+
+describe("ProxmoxLxcSandbox command environment", () => {
+  test("exports GitHub auth env for the full remote shell command", async () => {
+    const sandbox = await ProxmoxLxcSandbox.connect(
+      {
+        host: "127.0.0.1",
+        port: 22,
+        sshUser: "root",
+        workspacePath: "/workspace",
+        leaseId: "lease-1",
+        leasedAt: Date.now(),
+        nodeId: "oa-1",
+        expiresAt: Date.now() + 60_000,
+      },
+      {
+        githubToken: "github-token",
+      },
+    );
+
+    await sandbox.exec("printf '%s' \"$GH_TOKEN\"", "/workspace", 30_000);
+
+    const execCall = sshExecCalls.at(-1);
+    expect(execCall).toBeDefined();
+    expect(execCall).toContain("export GITHUB_TOKEN=");
+    expect(execCall).toContain("GH_TOKEN=");
+    expect(execCall).toContain("; cd ");
+    expect(execCall).not.toContain("GH_TOKEN='\\''github-token'\\'' cd ");
+  });
+});

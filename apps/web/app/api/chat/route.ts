@@ -160,7 +160,7 @@ export async function POST(req: Request) {
     return null;
   });
 
-  const [{ sandbox, skills }, preferences] = await Promise.all([
+  const [{ sandbox, skills, githubToken }, preferences] = await Promise.all([
     runtimePromise,
     preferencesPromise,
   ]);
@@ -203,6 +203,7 @@ export async function POST(req: Request) {
           workingDirectory: sandbox.workingDirectory,
           currentBranch: sandbox.currentBranch,
           environmentDetails: sandbox.environmentDetails,
+          githubToken,
         },
         model: mainModelSelection,
         ...(subagentModelSelection

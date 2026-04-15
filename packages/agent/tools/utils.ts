@@ -86,7 +86,9 @@ export async function getSandbox(
     );
   }
 
-  return connectSandbox(context.sandbox.state);
+  return connectSandbox(context.sandbox.state, {
+    githubToken: context.sandbox.githubToken,
+  });
 }
 
 /**

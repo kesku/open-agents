@@ -42,6 +42,7 @@ export async function createChatRuntime(params: {
 }): Promise<{
   sandbox: ConnectedSandbox;
   skills: DiscoveredSkills;
+  githubToken?: string;
 }> {
   const { userId, sessionId, sessionRecord } = params;
 
@@ -84,5 +85,6 @@ export async function createChatRuntime(params: {
   return {
     sandbox,
     skills,
+    githubToken: githubToken ?? undefined,
   };
 }

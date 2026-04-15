@@ -48,6 +48,7 @@ let preferencesState = {
 };
 let cachedSkillsState: unknown = null;
 let discoverSkillDirsCalls: string[][] = [];
+let githubTokenResult: string | null = null;
 
 const compareAndSetChatActiveStreamIdSpy = mock(async () => {
   const nextResult = compareAndSetResults.shift();
@@ -177,7 +178,7 @@ mock.module("@/lib/skills-cache", () => ({
 }));
 
 mock.module("@/lib/github/user-token", () => ({
-  getUserGitHubToken: async () => null,
+  getUserGitHubToken: async () => githubTokenResult,
 }));
 
 mock.module("@/lib/sandbox/config", () => ({
@@ -254,6 +255,7 @@ describe("/api/chat route", () => {
       autoCreatePr: false,
       modelVariants: [],
     };
+    githubTokenResult = null;
     compareAndSetChatActiveStreamIdSpy.mockClear();
     persistAssistantMessagesWithToolResultsSpy.mockClear();
     currentAuthSession = {
@@ -340,6 +342,25 @@ describe("/api/chat route", () => {
         maxSteps: 500,
         agentOptions: expect.objectContaining({
           customInstructions: assistantFileLinkPrompt,
+        }),
+      }),
+    ]);
+  });
+
+  test("serializes the GitHub token into agent sandbox context for tool reconnects", async () => {
+    const { POST } = await routeModulePromise;
+    githubTokenResult = "gh-token";
+
+    const response = await POST(createValidRequest());
+
+    expect(response.ok).toBe(true);
+    expect(startCalls).toHaveLength(1);
+    expect(startCalls[0]?.[1]).toEqual([
+      expect.objectContaining({
+        agentOptions: expect.objectContaining({
+          sandbox: expect.objectContaining({
+            githubToken: "gh-token",
+          }),
         }),
       }),
     ]);
