@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+if [[ "$(git config --bool --get openagents.autoDeployHomelab || echo false)" != "true" ]]; then
+  exit 0
+fi
+
+repo_root="$(git rev-parse --show-toplevel)"
+log_file="${repo_root}/.git/open-agents-homelab-deploy.log"
+
+(
+  cd "${repo_root}"
+  echo "[$(date -u +"%Y-%m-%dT%H:%M:%SZ")] Deploying $(git rev-parse --short HEAD) to homelab" >>"${log_file}"
+  scripts/deploy-homelab.sh --skip-checks >>"${log_file}" 2>&1
+) &

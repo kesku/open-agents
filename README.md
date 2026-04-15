@@ -137,6 +137,14 @@ Rebuild and restart after code changes:
 pct exec 141 -- bash -lc "source /root/open-agents-env.sh && cd /opt/open-agents/apps/web && NODE_OPTIONS=--max-old-space-size=2048 bun run build && systemctl restart open-agents.service"
 ```
 
+## Deployment Automation
+
+Deploy the current working tree to the homelab:
+
+```bash
+bun run deploy:homelab
+```
+
 Check sandbox status for a session:
 
 ```bash
