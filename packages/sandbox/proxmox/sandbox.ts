@@ -189,6 +189,7 @@ export class ProxmoxLxcSandbox implements Sandbox {
   get environmentDetails(): string {
     const host = this.host;
     const ports = this.ports ?? [];
+    const hasGitHubAuth = Boolean(this.env?.GH_TOKEN || this.env?.GITHUB_TOKEN);
     const previewLines = host
       ? ports.map((port) => `  - Port ${port}: ${this.domain(port)}`)
       : [];
@@ -197,11 +198,17 @@ export class ProxmoxLxcSandbox implements Sandbox {
       previewLines.length > 0
         ? `\n- Direct preview URLs for common ports:\n${previewLines.join("\n")}`
         : "";
+    const githubText = hasGitHubAuth
+      ? [
+          "\n- GitHub auth is already available inside bash commands via `GH_TOKEN` and `GITHUB_TOKEN`",
+          "- Prefer `gh` for PR, branch, and repo operations when it is installed; otherwise fall back to GitHub HTTPS APIs with `curl`",
+        ].join("\n")
+      : "";
 
     return `- Sandbox runtime is a leased Proxmox LXC reached over SSH
 - The working directory is ${this.workingDirectory}
 - All bash commands already run in the working directory by default — never prepend \`cd <working-directory> &&\`; just run the command directly
-- The lease is hard-reset when the sandbox is released, so filesystem state is not resumable between sessions${previewText}`;
+- The lease is hard-reset when the sandbox is released, so filesystem state is not resumable between sessions${githubText}${previewText}`;
   }
 
   async readFile(path: string, _encoding: "utf-8"): Promise<string> {

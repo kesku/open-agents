@@ -52,3 +52,27 @@ describe("ProxmoxLxcSandbox.execDetached", () => {
     expect(detachedCall).toContain("& echo $!)");
   });
 });
+
+describe("ProxmoxLxcSandbox.environmentDetails", () => {
+  test("mentions GitHub auth when a token is provided", async () => {
+    const sandbox = await ProxmoxLxcSandbox.connect(
+      {
+        host: "127.0.0.1",
+        port: 22,
+        sshUser: "root",
+        workspacePath: "/workspace",
+        leaseId: "lease-1",
+        leasedAt: Date.now(),
+        nodeId: "oa-1",
+        expiresAt: Date.now() + 60_000,
+      },
+      {
+        githubToken: "github-token",
+      },
+    );
+
+    expect(sandbox.environmentDetails).toContain("GH_TOKEN");
+    expect(sandbox.environmentDetails).toContain("GITHUB_TOKEN");
+    expect(sandbox.environmentDetails).toContain("Prefer `gh`");
+  });
+});

@@ -18,6 +18,7 @@
     "web": "cd apps/web/ && bun run dev",
     "dev": "turbo dev",
     "build": "turbo build",
+    "homelab:ensure-tools": "./scripts/ensure-homelab-tools.sh",
     "deploy:homelab": "./scripts/deploy-homelab.sh",
     "deploy:homelab:skip-checks": "./scripts/deploy-homelab.sh --skip-checks",
     "deploy:homelab:install-hooks": "./scripts/install-homelab-hooks.sh",

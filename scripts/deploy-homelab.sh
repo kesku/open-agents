@@ -7,11 +7,12 @@ usage() {
 Deploy the current working tree to the homelab web container.
 
 Usage:
-  scripts/deploy-homelab.sh [--skip-checks] [--skip-build]
+  scripts/deploy-homelab.sh [--skip-checks] [--skip-build] [--skip-tools]
 
 Options:
   --skip-checks  Skip local `bun run ci` before deploying.
   --skip-build   Sync files only; skip remote install/build/restart.
+  --skip-tools   Skip homelab tool bootstrap before syncing.
   -h, --help     Show this help text.
 
 Environment overrides:
@@ -27,6 +28,7 @@ EOF
 
 run_checks=1
 run_build=1
+run_tools=1
 
 while (($# > 0)); do
   case "$1" in
@@ -35,6 +37,9 @@ while (($# > 0)); do
       ;;
     --skip-build)
       run_build=0
+      ;;
+    --skip-tools)
+      run_tools=0
       ;;
     -h|--help)
       usage
@@ -77,6 +82,11 @@ cd "${repo_root}"
 if [[ "${run_checks}" -eq 1 ]]; then
   echo "Running local checks..."
   bun run ci
+fi
+
+if [[ "${run_tools}" -eq 1 ]]; then
+  echo "Ensuring homelab tools are installed..."
+  "${script_dir}/ensure-homelab-tools.sh"
 fi
 
 echo "Syncing repository to ${ssh_target} (CT ${ct_id})..."

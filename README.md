@@ -113,6 +113,9 @@ Notes:
 - `LOCAL_GITHUB_ACCESS_TOKEN` is the only required value.
 - `LOCAL_GITHUB_USER_ID`, `LOCAL_GITHUB_USERNAME`, and
   `LOCAL_GITHUB_AVATAR_URL` are optional
+- Proxmox sandbox commands automatically receive the same token as
+  `GH_TOKEN` and `GITHUB_TOKEN`
+- The agent can use `gh` directly inside a sandbox when it is installed
 - The repo picker is local-first: it shows repositories visible to the server
   token and also accepts pasted GitHub URLs like
   `https://github.com/owner/repo` or `owner/repo`.
