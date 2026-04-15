@@ -1287,6 +1287,7 @@ export async function findPullRequestByBranch(params: {
   owner: string;
   repo: string;
   branchName: string;
+  headOwner?: string;
   token?: string;
 }): Promise<{
   found: boolean;
@@ -1296,7 +1297,7 @@ export async function findPullRequestByBranch(params: {
   prTitle?: string;
   error?: string;
 }> {
-  const { owner, repo, branchName, token } = params;
+  const { owner, repo, branchName, headOwner, token } = params;
 
   try {
     const result = await getOctokit(token);
@@ -1309,7 +1310,7 @@ export async function findPullRequestByBranch(params: {
     const response = await result.octokit.rest.pulls.list({
       owner,
       repo,
-      head: `${owner}:${branchName}`,
+      head: `${headOwner ?? owner}:${branchName}`,
       state: "all",
       per_page: 1,
       sort: "updated",

@@ -2,6 +2,7 @@ import { getSessionById, updateSession } from "@/lib/db/sessions";
 import {
   createPullRequest,
   enablePullRequestAutoMerge,
+  findPullRequestByBranch,
   parseGitHubUrl,
 } from "@/lib/github/client";
 import { resolveGitHubBaseBranch } from "@/lib/github/base-branch";
@@ -197,6 +198,42 @@ export async function POST(req: Request) {
             }
           : {}),
       });
+    }
+
+    if (error === "PR already exists or branch not found") {
+      const existingPr = await findPullRequestByBranch({
+        owner: parsedRepoUrl.owner,
+        repo: parsedRepoUrl.repo,
+        branchName: resolvedBranch,
+        headOwner,
+        token: userToken,
+      });
+
+      if (
+        existingPr.found &&
+        existingPr.prNumber &&
+        existingPr.prStatus === "open" &&
+        existingPr.prUrl
+      ) {
+        await updateSession(sessionId, {
+          prNumber: existingPr.prNumber,
+          prStatus: existingPr.prStatus,
+        });
+
+        return Response.json({
+          success: true,
+          prUrl: existingPr.prUrl,
+          prNumber: existingPr.prNumber,
+          prStatus: existingPr.prStatus,
+          existing: true,
+          ...(enableAutoMerge
+            ? {
+                autoMergeEnabled: false,
+                autoMergeError: "This branch already has an open pull request.",
+              }
+            : {}),
+        });
+      }
     }
 
     // Determine appropriate status code based on error type

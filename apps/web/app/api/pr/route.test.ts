@@ -15,6 +15,15 @@ type CreatePullRequestResult = {
   error?: string;
 };
 
+type FindPullRequestByBranchResult = {
+  found: boolean;
+  prNumber?: number;
+  prStatus?: "open" | "closed" | "merged";
+  prUrl?: string;
+  prTitle?: string;
+  error?: string;
+};
+
 type EnableAutoMergeResult = {
   success: boolean;
   mergeMethod?: "merge" | "squash" | "rebase";
@@ -39,9 +48,13 @@ let enableAutoMergeResult: EnableAutoMergeResult = {
 };
 let userToken: string | null = "user-token";
 let resolvedBaseBranch = "main";
+let findPullRequestByBranchResult: FindPullRequestByBranchResult = {
+  found: false,
+};
 
 const createCalls: Array<Record<string, unknown>> = [];
 const autoMergeCalls: Array<Record<string, unknown>> = [];
+const findPullRequestCalls: Array<Record<string, unknown>> = [];
 const updateCalls: Array<{
   sessionId: string;
   patch: Record<string, unknown>;
@@ -90,6 +103,10 @@ function registerRouteMocks() {
       createCalls.push(input);
       return createPullRequestResult;
     },
+    findPullRequestByBranch: async (input: Record<string, unknown>) => {
+      findPullRequestCalls.push(input);
+      return findPullRequestByBranchResult;
+    },
     enablePullRequestAutoMerge: async (input: Record<string, unknown>) => {
       autoMergeCalls.push(input);
       return enableAutoMergeResult;
@@ -123,8 +140,10 @@ describe("/api/pr", () => {
     };
     userToken = "user-token";
     resolvedBaseBranch = "main";
+    findPullRequestByBranchResult = { found: false };
     createCalls.length = 0;
     autoMergeCalls.length = 0;
+    findPullRequestCalls.length = 0;
     updateCalls.length = 0;
     registerRouteMocks();
   });
@@ -226,6 +245,68 @@ describe("/api/pr", () => {
     expect(createCalls).toHaveLength(1);
     expect(autoMergeCalls).toHaveLength(0);
     expect(updateCalls).toHaveLength(0);
+  });
+
+  test("reuses an existing open pull request when GitHub reports one already exists", async () => {
+    createPullRequestResult = {
+      success: false,
+      error: "PR already exists or branch not found",
+    };
+    findPullRequestByBranchResult = {
+      found: true,
+      prNumber: 81,
+      prStatus: "open",
+      prUrl: "https://github.com/acme/rocket/pull/81",
+    };
+
+    const { POST } = await loadRouteModule();
+
+    const response = await POST(
+      new Request("http://localhost/api/pr", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sessionId: "session-1",
+          repoUrl: "https://github.com/acme/rocket.git",
+          branchName: "feature/auto-merge",
+          title: "Ship auto-merge",
+          baseBranch: "main",
+          enableAutoMerge: true,
+        }),
+      }),
+    );
+
+    const body = (await response.json()) as {
+      success?: boolean;
+      existing?: boolean;
+      prNumber?: number;
+      prUrl?: string;
+      prStatus?: string;
+      autoMergeEnabled?: boolean;
+      autoMergeError?: string;
+    };
+
+    expect(response.status).toBe(200);
+    expect(body.success).toBe(true);
+    expect(body.existing).toBe(true);
+    expect(body.prNumber).toBe(81);
+    expect(body.prStatus).toBe("open");
+    expect(body.prUrl).toBe("https://github.com/acme/rocket/pull/81");
+    expect(body.autoMergeEnabled).toBe(false);
+    expect(body.autoMergeError).toBe(
+      "This branch already has an open pull request.",
+    );
+    expect(createCalls).toHaveLength(1);
+    expect(findPullRequestCalls).toHaveLength(1);
+    expect(updateCalls).toEqual([
+      {
+        sessionId: "session-1",
+        patch: {
+          prNumber: 81,
+          prStatus: "open",
+        },
+      },
+    ]);
   });
 
   test("rejects auto-merge for draft pull requests", async () => {
