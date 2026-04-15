@@ -1,17 +1,16 @@
 "use client";
 
-import { History } from "lucide-react";
+import { History, Settings } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { SignedOutHero } from "@/components/auth/signed-out-hero";
 import { HomeSkeleton } from "@/components/home-skeleton";
 import type { SandboxType } from "@/components/sandbox-selector-compact";
 import { SessionDrawer } from "@/components/session-drawer";
 import { SessionStarter } from "@/components/session-starter";
-import { UserAvatarDropdown } from "@/components/user-avatar-dropdown";
+import { Button } from "@/components/ui/button";
 import { useSession } from "@/hooks/use-session";
 import { useSessions } from "@/hooks/use-sessions";
-import type { VercelProjectSelection } from "@/lib/vercel/types";
 
 interface HomePageProps {
   hasSessionCookie: boolean;
@@ -40,7 +39,6 @@ export function HomePage({ hasSessionCookie, lastRepo }: HomePageProps) {
     sandboxType: SandboxType;
     autoCommitPush: boolean;
     autoCreatePr: boolean;
-    vercelProject?: VercelProjectSelection | null;
   }) => {
     setIsCreating(true);
     try {
@@ -53,7 +51,6 @@ export function HomePage({ hasSessionCookie, lastRepo }: HomePageProps) {
         sandboxType: input.sandboxType,
         autoCommitPush: input.autoCommitPush,
         autoCreatePr: input.autoCreatePr,
-        vercelProject: input.vercelProject,
       });
 
       router.push(`/sessions/${createdSession.id}/chats/${chat.id}`);
@@ -73,7 +70,22 @@ export function HomePage({ hasSessionCookie, lastRepo }: HomePageProps) {
   }
 
   if (!isAuthenticated) {
-    return <SignedOutHero />;
+    return (
+      <div className="flex min-h-screen flex-col bg-background text-foreground">
+        <main className="flex flex-1 items-center justify-center px-6">
+          <div className="w-full max-w-md rounded-2xl border border-border/70 bg-card/80 p-6 shadow-sm">
+            <div className="space-y-2">
+              <h1 className="text-2xl font-semibold">Open Agents</h1>
+              <p className="text-sm leading-6 text-muted-foreground">
+                We could not load the workspace session. Refresh the page, and
+                if it keeps happening check the server logs for session
+                bootstrap errors.
+              </p>
+            </div>
+          </div>
+        </main>
+      </div>
+    );
   }
 
   return (
@@ -100,7 +112,12 @@ export function HomePage({ hasSessionCookie, lastRepo }: HomePageProps) {
             <History className="h-4 w-4" />
             <span>Sessions</span>
           </button>
-          <UserAvatarDropdown />
+          <Button variant="ghost" size="sm" asChild>
+            <Link href="/settings/preferences">
+              <Settings className="h-4 w-4" />
+              Settings
+            </Link>
+          </Button>
         </div>
       </header>
 

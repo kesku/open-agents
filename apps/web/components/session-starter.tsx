@@ -9,12 +9,9 @@ import {
   Plus,
 } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import { useGitHubConnectionStatus } from "@/hooks/use-github-connection-status";
+import { useState } from "react";
 import { useSession } from "@/hooks/use-session";
 import { useUserPreferences } from "@/hooks/use-user-preferences";
-import { useVercelRepoProjects } from "@/hooks/use-vercel-repo-projects";
-import type { VercelProjectSelection } from "@/lib/vercel/types";
 import { cn } from "@/lib/utils";
 import { BranchSelectorCompact } from "./branch-selector-compact";
 import { RepoSelectorCompact } from "./repo-selector-compact";
@@ -23,7 +20,6 @@ import {
   SANDBOX_OPTIONS,
   type SandboxType,
 } from "./sandbox-selector-compact";
-import { SessionStarterVercelSyncSection } from "./session-starter-vercel-sync-section";
 import { Switch } from "./ui/switch";
 
 type SessionMode = "empty" | "repo";
@@ -38,7 +34,6 @@ interface SessionStarterProps {
     sandboxType: SandboxType;
     autoCommitPush: boolean;
     autoCreatePr: boolean;
-    vercelProject?: VercelProjectSelection | null;
   }) => void;
   isLoading?: boolean;
   lastRepo: { owner: string; repo: string } | null;
@@ -58,15 +53,8 @@ export function SessionStarter({
   const [selectedRepo, setSelectedRepo] = useState(() => lastRepo?.repo ?? "");
   const [selectedBranch, setSelectedBranch] = useState<string | null>(null);
   const [isNewBranch, setIsNewBranch] = useState(!!lastRepo);
-  const [vercelProjectChoice, setVercelProjectChoice] = useState<
-    string | null | undefined
-  >(undefined);
 
-  const { session, loading: sessionLoading, hasGitHub } = useSession();
-  const { reconnectRequired, isLoading: githubConnectionLoading } =
-    useGitHubConnectionStatus({
-      enabled: hasGitHub,
-    });
+  const { hasGitHub } = useSession();
   const { preferences, loading: preferencesLoading } = useUserPreferences();
   const defaultAutoCommitPush = preferences?.autoCommitPush ?? false;
   const defaultAutoCreatePr = preferences?.autoCreatePr ?? false;
@@ -77,46 +65,11 @@ export function SessionStarter({
   const sandboxName =
     SANDBOX_OPTIONS.find((s) => s.id === sandboxType)?.name ?? sandboxType;
 
-  const shouldLoadVercelProjects =
-    mode === "repo" &&
-    !githubConnectionLoading &&
-    !reconnectRequired &&
-    !!selectedOwner &&
-    !!selectedRepo &&
-    session?.authProvider === "vercel";
-  const {
-    data: repoProjects,
-    loading: repoProjectsLoading,
-    error: repoProjectsError,
-  } = useVercelRepoProjects({
-    enabled: shouldLoadVercelProjects,
-    repoOwner: selectedOwner,
-    repoName: selectedRepo,
-  });
-
-  useEffect(() => {
-    if (!shouldLoadVercelProjects) {
-      setVercelProjectChoice(undefined);
-      return;
-    }
-    if (!repoProjects || repoProjectsLoading) return;
-    if (repoProjects.selectedProjectId) {
-      setVercelProjectChoice(repoProjects.selectedProjectId);
-      return;
-    }
-    if (repoProjects.projects.length === 0) {
-      setVercelProjectChoice(null);
-      return;
-    }
-    setVercelProjectChoice(undefined);
-  }, [repoProjects, repoProjectsLoading, shouldLoadVercelProjects]);
-
   const handleRepoSelect = (owner: string, repo: string) => {
     setSelectedOwner(owner);
     setSelectedRepo(repo);
     setSelectedBranch(null);
     setIsNewBranch(false);
-    setVercelProjectChoice(undefined);
   };
 
   const handleRepoClear = () => {
@@ -124,7 +77,6 @@ export function SessionStarter({
     setSelectedRepo("");
     setSelectedBranch(null);
     setIsNewBranch(false);
-    setVercelProjectChoice(undefined);
   };
 
   const handleBranchChange = (branch: string | null, newBranch: boolean) => {
@@ -139,54 +91,14 @@ export function SessionStarter({
 
   const isRepoSelectionComplete =
     mode !== "repo" || (selectedOwner && selectedRepo);
-  const isVercelLookupPending =
-    mode === "repo" &&
-    !!selectedOwner &&
-    !!selectedRepo &&
-    (sessionLoading || (shouldLoadVercelProjects && repoProjectsLoading));
-  const requiresVercelChoice =
-    shouldLoadVercelProjects &&
-    !repoProjectsLoading &&
-    !repoProjectsError &&
-    !!repoProjects &&
-    repoProjects.projects.length > 0 &&
-    repoProjects.selectedProjectId === null &&
-    vercelProjectChoice === undefined;
   const controlsDisabled = isLoading || preferencesLoading;
   const isSubmitDisabled =
-    controlsDisabled ||
-    (mode === "repo" && (githubConnectionLoading || reconnectRequired)) ||
-    !isRepoSelectionComplete ||
-    isVercelLookupPending ||
-    requiresVercelChoice;
+    controlsDisabled || (mode === "repo" && !isRepoSelectionComplete);
   const effectiveAutoCommitPush = autoCommitPush ?? defaultAutoCommitPush;
   const effectiveAutoCreatePr = autoCreatePr ?? defaultAutoCreatePr;
-  const showVercelProjectSection =
-    mode === "repo" &&
-    !githubConnectionLoading &&
-    !reconnectRequired &&
-    !!selectedOwner &&
-    !!selectedRepo &&
-    (sessionLoading || session?.authProvider === "vercel");
 
   const handleSubmit = () => {
     if (isSubmitDisabled) return;
-
-    let vercelProject: VercelProjectSelection | null | undefined;
-    if (shouldLoadVercelProjects) {
-      if (repoProjectsError || !repoProjects) {
-        vercelProject = undefined;
-      } else if (vercelProjectChoice === null) {
-        vercelProject = null;
-      } else if (typeof vercelProjectChoice === "string") {
-        vercelProject =
-          repoProjects.projects.find(
-            (project) => project.projectId === vercelProjectChoice,
-          ) ?? null;
-      } else {
-        return;
-      }
-    }
 
     onSubmit({
       repoOwner: mode === "repo" ? selectedOwner || undefined : undefined,
@@ -200,7 +112,6 @@ export function SessionStarter({
       sandboxType,
       autoCommitPush: effectiveAutoCommitPush,
       autoCreatePr: effectiveAutoCommitPush ? effectiveAutoCreatePr : false,
-      vercelProject,
     });
   };
 
@@ -253,28 +164,13 @@ export function SessionStarter({
               selectedRepo={selectedRepo}
               onSelect={handleRepoSelect}
             />
-            {selectedOwner &&
-              selectedRepo &&
-              !githubConnectionLoading &&
-              !reconnectRequired && (
-                <BranchSelectorCompact
-                  owner={selectedOwner}
-                  repo={selectedRepo}
-                  value={selectedBranch}
-                  isNewBranch={isNewBranch}
-                  onChange={handleBranchChange}
-                />
-              )}
-
-            {showVercelProjectSection && (
-              <SessionStarterVercelSyncSection
-                controlsDisabled={controlsDisabled}
-                isVercelLookupPending={isVercelLookupPending}
-                repoProjects={repoProjects}
-                repoProjectsError={repoProjectsError}
-                requiresVercelChoice={requiresVercelChoice}
-                vercelProjectChoice={vercelProjectChoice}
-                onVercelProjectChoiceChange={setVercelProjectChoice}
+            {hasGitHub && selectedOwner && selectedRepo && (
+              <BranchSelectorCompact
+                owner={selectedOwner}
+                repo={selectedRepo}
+                value={selectedBranch}
+                isNewBranch={isNewBranch}
+                onChange={handleBranchChange}
               />
             )}
           </div>

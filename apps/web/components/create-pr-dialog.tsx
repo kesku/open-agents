@@ -36,6 +36,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { createClientId } from "@/lib/client-id";
 import type { Session } from "@/lib/db/schema";
 import {
   createSessionBranch,
@@ -296,7 +297,7 @@ export function CreatePRDialog({
     setIsCreating(true);
     setError(null);
 
-    const gitMessageId = crypto.randomUUID();
+    const gitMessageId = createClientId("git");
     const prPartId = `${gitMessageId}:pr`;
 
     try {

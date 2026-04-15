@@ -1,9 +1,10 @@
 import { cookies } from "next/headers";
 import type { NextRequest } from "next/server";
-import { getGitHubAccount } from "@/lib/db/accounts";
-import { getInstallationsByUserId } from "@/lib/db/installations";
-import { getGitHubConnectionModeForUser } from "@/lib/github/local-github";
 import { userExists } from "@/lib/db/users";
+import {
+  getGitHubConnectionModeForUser,
+  getLocalGitHubAccessToken,
+} from "@/lib/github/local-github";
 import { SESSION_COOKIE_NAME } from "@/lib/session/constants";
 import { getSessionFromReq } from "@/lib/session/server";
 import type { SessionUserInfo } from "@/lib/session/types";
@@ -17,13 +18,7 @@ export async function GET(req: NextRequest) {
     return Response.json(UNAUTHENTICATED);
   }
 
-  // Run the user-existence check in parallel with the GitHub queries
-  // so there is zero added latency on the happy path.
-  const [exists, ghAccount, installations] = await Promise.all([
-    userExists(session.user.id),
-    getGitHubAccount(session.user.id),
-    getInstallationsByUserId(session.user.id),
-  ]);
+  const exists = await userExists(session.user.id);
 
   // The session cookie (JWE) is self-contained and can outlive the user record.
   // If the user no longer exists, clear the stale cookie.
@@ -33,19 +28,18 @@ export async function GET(req: NextRequest) {
     return Response.json(UNAUTHENTICATED);
   }
 
-  const hasGitHubAccount = ghAccount !== null;
-  const hasGitHubInstallations = installations.length > 0;
-  const hasGitHub = hasGitHubAccount || hasGitHubInstallations;
-  const githubConnectionMode = hasGitHub
-    ? (getGitHubConnectionModeForUser(session.user.id) ?? "oauth-app")
-    : undefined;
+  const hasGitHub = getLocalGitHubAccessToken(session.user.id) !== null;
+  const githubConnectionMode =
+    hasGitHub && session.user.id
+      ? (getGitHubConnectionModeForUser(session.user.id) ?? undefined)
+      : undefined;
 
   const data: SessionUserInfo = {
     user: session.user,
     authProvider: session.authProvider,
     hasGitHub,
-    hasGitHubAccount,
-    hasGitHubInstallations,
+    hasGitHubAccount: hasGitHub,
+    hasGitHubInstallations: false,
     githubConnectionMode,
   };
 

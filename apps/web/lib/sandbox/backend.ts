@@ -12,7 +12,7 @@ export interface SandboxCapabilities {
   supportsSnapshots: boolean;
 }
 
-const DEFAULT_SANDBOX_BACKEND: AppSandboxType = "vercel";
+const DEFAULT_SANDBOX_BACKEND: AppSandboxType = "proxmox-lxc";
 
 const SANDBOX_CAPABILITIES: Record<AppSandboxType, SandboxCapabilities> = {
   vercel: {
@@ -32,6 +32,10 @@ const SANDBOX_CAPABILITIES: Record<AppSandboxType, SandboxCapabilities> = {
 };
 
 function normalizeSandboxType(value: string | undefined): AppSandboxType {
+  if (value === "vercel") {
+    return value;
+  }
+
   if (value === "proxmox-lxc") {
     return value;
   }
@@ -53,8 +57,7 @@ export function isSupportedSandboxType(
   value: unknown,
 ): value is AppSandboxType {
   return (
-    typeof value === "string" &&
-    getAvailableSandboxTypes().includes(value as AppSandboxType)
+    typeof value === "string" && SANDBOX_TYPES.includes(value as AppSandboxType)
   );
 }
 
@@ -73,9 +76,9 @@ export function getSandboxCapabilities(
 }
 
 export function getSandboxOptionLabel(type: AppSandboxType): string {
-  return type === "proxmox-lxc" ? "Proxmox LXC" : "Vercel";
+  return type === "proxmox-lxc" ? "Proxmox LXC" : "Legacy Vercel";
 }
 
 export function getSandboxOptionDescription(type: AppSandboxType): string {
-  return type === "proxmox-lxc" ? "Local SSH pool" : "Cloud sandbox";
+  return type === "proxmox-lxc" ? "Local SSH pool" : "Legacy cloud sandbox";
 }

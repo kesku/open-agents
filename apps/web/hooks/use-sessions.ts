@@ -5,7 +5,6 @@ import { toast } from "sonner";
 import useSWR, { useSWRConfig } from "swr";
 import type { SandboxType } from "@/components/sandbox-selector-compact";
 import type { Chat, Session } from "@/lib/db/schema";
-import type { VercelProjectSelection } from "@/lib/vercel/types";
 import { fetcher } from "@/lib/swr";
 
 export type SessionWithUnread = Pick<
@@ -38,7 +37,6 @@ interface CreateSessionInput {
   sandboxType: SandboxType;
   autoCommitPush: boolean;
   autoCreatePr: boolean;
-  vercelProject?: VercelProjectSelection | null;
 }
 
 interface SessionsResponse {

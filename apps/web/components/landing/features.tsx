@@ -64,19 +64,19 @@ export function LandingFeatures() {
             bullets={[
               "File ops, search, shell, and task delegation built in",
               "Explorer and executor subagents for parallel work",
-              "Multi-model support with AI Gateway",
+              "OpenAI and Perplexity models in one catalog",
             ]}
             window={<FeatureAgent />}
           />
 
           <Spotlight
             tone="ash"
-            title="Cloud sandboxes, not local machines."
-            description="Every session runs in an isolated Vercel sandbox with its own branch. Work is committed and pushed automatically — nothing is lost when the sandbox expires."
+            title="Local sandboxes with clean leases."
+            description="Every session runs on a leased Proxmox LXC with a real workspace, editor, and dev server. When the lease ends, the node is hard-reset and returned to the pool."
             bullets={[
-              "Ephemeral environments with full git integration",
-              "Auto-hibernate on inactivity, instant restore",
-              "Snapshot and restore filesystem state",
+              "Fixed Proxmox pool with SSH-backed execution",
+              "Built-in editor and preview server on every node",
+              "Hard reset on release for predictable state",
             ]}
             flip
             window={<FeatureSandbox />}
@@ -88,7 +88,7 @@ export function LandingFeatures() {
             description="Agent loops run as durable workflows that survive restarts, retry on failure, and coordinate multi-step operations over time. No work is ever lost mid-run."
             bullets={[
               "Resumable agent loops with automatic checkpointing",
-              "Post-finish: usage tracking, diff caching, auto-commit",
+              "Post-finish: diff caching, auto-commit, PR prep",
               "Reconnect to running workflows from any client",
             ]}
             window={<FeatureWorkflow />}

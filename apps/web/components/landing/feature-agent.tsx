@@ -3,12 +3,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 const tools = [
-  { name: "grep", detail: "auth patterns in src/" },
-  { name: "read", detail: "lib/session.ts" },
-  { name: "write", detail: "app/api/auth/route.ts" },
-  { name: "write", detail: "app/api/auth/callback/route.ts" },
-  { name: "edit", detail: "middleware.ts" },
-  { name: "bash", detail: "bun run typecheck" },
+  { name: "grep", detail: "sandbox lifecycle in apps/web/" },
+  { name: "read", detail: "packages/sandbox/proxmox/sandbox.ts" },
+  { name: "write", detail: "apps/web/lib/model-catalog.ts" },
+  { name: "edit", detail: "apps/web/app/settings/accounts-section.tsx" },
+  { name: "bash", detail: "bun run ci" },
+  { name: "deploy", detail: "bun run deploy:homelab" },
 ] as const;
 
 export function FeatureAgent() {
@@ -82,7 +82,8 @@ export function FeatureAgent() {
           className="mt-5 text-[12px] leading-relaxed text-(--l-panel-fg-2) transition-opacity duration-500"
           style={{ opacity: count >= tools.length ? 1 : 0 }}
         >
-          auth flow complete. 2 routes, middleware, callback. typecheck passes.
+          local-first cleanup complete. Proxmox runtime, GitHub token wiring,
+          and model catalog all verified.
         </div>
       </div>
     </div>

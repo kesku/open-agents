@@ -11,15 +11,14 @@ import {
   Monitor,
   Pencil,
   Plus,
+  ServerCog,
   Settings,
 } from "lucide-react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { CSSProperties } from "react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BranchPickerDialog } from "@/components/branch-picker-dialog";
 import { getValidRenameTitle } from "@/components/inbox-sidebar-rename";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -42,12 +41,9 @@ import {
 } from "@/components/ui/tooltip";
 import { useSidebar } from "@/components/ui/sidebar";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { useLeaderboardRank } from "@/hooks/use-leaderboard-rank";
-import { useSession } from "@/hooks/use-session";
 import type { SessionWithUnread } from "@/hooks/use-sessions";
 import type { Session as AuthSession } from "@/lib/session/types";
 import { formatRelativeTime } from "@/lib/format-relative-time";
-import { getUsageLeaderboardDomain } from "@/lib/usage/leaderboard-domain";
 
 type InboxSidebarProps = {
   sessions: SessionWithUnread[];
@@ -85,21 +81,6 @@ const sessionRowPerformanceStyle: CSSProperties = {
   contentVisibility: "auto",
   containIntrinsicSize: "2.25rem",
 };
-
-function formatDomainOrg(domain: string): string {
-  const dotIndex = domain.indexOf(".");
-  const name = dotIndex > 0 ? domain.slice(0, dotIndex) : domain;
-  return name.charAt(0).toUpperCase() + name.slice(1);
-}
-
-function getAvatarFallback(username: string): string {
-  const normalized = username.trim();
-  if (!normalized) {
-    return "?";
-  }
-
-  return normalized.slice(0, 2).toUpperCase();
-}
 
 function DiffStats({
   added,
@@ -640,12 +621,8 @@ export function InboxSidebar({
   onOpenNewSession,
   onCreateSessionForRepo,
   onCreateSessionFromBranch,
-  initialUser,
 }: InboxSidebarProps) {
   const router = useRouter();
-  const { session } = useSession();
-  const { rank: leaderboardRank, loading: leaderboardLoading } =
-    useLeaderboardRank();
   const { isMobile, setOpenMobile } = useSidebar();
   const [showArchived, setShowArchived] = useState(false);
   const [archivedSessions, setArchivedSessions] = useState<SessionWithUnread[]>(
@@ -742,7 +719,6 @@ export function InboxSidebar({
   const showLoadingSkeleton =
     (!showArchived && sessionsLoading && sessions.length === 0) ||
     (showArchived && archivedSessionsLoading && archivedSessions.length === 0);
-  const sidebarUser = session?.user ?? initialUser;
   const groupedSessions = useMemo(
     () => groupSessionsByRepo(displayedSessions),
     [displayedSessions],
@@ -1130,57 +1106,31 @@ export function InboxSidebar({
         )}
       </div>
 
-      {sidebarUser ? (
-        <div className="border-t border-border p-3">
-          <div className="flex items-center gap-2 rounded-lg p-2">
-            <Avatar className="h-9 w-9 shrink-0">
-              {sidebarUser.avatar ? (
-                <AvatarImage
-                  src={sidebarUser.avatar}
-                  alt={sidebarUser.username}
-                />
-              ) : null}
-              <AvatarFallback>
-                {getAvatarFallback(sidebarUser.username)}
-              </AvatarFallback>
-            </Avatar>
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-semibold leading-none text-foreground">
-                {sidebarUser.username}
-              </p>
-              {sidebarUser.email ? (
-                <p className="mt-1 truncate text-xs text-muted-foreground">
-                  {sidebarUser.email}
-                </p>
-              ) : null}
-              {leaderboardRank ? (
-                <Link
-                  href="/settings/leaderboard"
-                  className="mt-1 block truncate text-xs text-muted-foreground hover:text-foreground"
-                >
-                  <span className="font-semibold tabular-nums text-foreground/70">
-                    #{leaderboardRank.rank}
-                  </span>{" "}
-                  in {formatDomainOrg(leaderboardRank.domain)}
-                </Link>
-              ) : leaderboardLoading &&
-                getUsageLeaderboardDomain(sidebarUser.email) ? (
-                <span className="mt-1 block h-4 w-24 animate-pulse rounded bg-muted" />
-              ) : null}
-            </div>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 shrink-0 text-muted-foreground hover:text-foreground"
-              onClick={() => router.push("/settings")}
-              aria-label="Open settings"
-            >
-              <Settings className="h-4 w-4" />
-            </Button>
+      <div className="border-t border-border p-3">
+        <div className="flex items-center gap-3 rounded-lg border border-border/60 bg-muted/15 px-3 py-3">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border/60 bg-background text-muted-foreground">
+            <ServerCog className="h-4 w-4" />
           </div>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-semibold leading-none text-foreground">
+              Local workspace
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              GitHub, models, and sandbox defaults live here.
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 shrink-0 text-muted-foreground hover:text-foreground"
+            onClick={() => router.push("/settings/preferences")}
+            aria-label="Open workspace settings"
+          >
+            <Settings className="h-4 w-4" />
+          </Button>
         </div>
-      ) : null}
+      </div>
 
       {branchPickerRepo ? (
         <BranchPickerDialog

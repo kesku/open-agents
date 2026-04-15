@@ -78,7 +78,6 @@ export default async function SharedPage({ params }: SharedPageProps) {
     notFound();
   }
 
-  // Fetch the user who owns this session (public profile info only)
   const sessionUser = await db.query.users.findFirst({
     where: eq(users.id, session.userId),
     columns: {

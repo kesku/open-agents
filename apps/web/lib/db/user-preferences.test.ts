@@ -13,7 +13,7 @@ describe("toUserPreferencesData", () => {
     expect(toUserPreferencesData()).toEqual({
       defaultModelId: "openai/gpt-5.4",
       defaultSubagentModelId: null,
-      defaultSandboxType: "vercel",
+      defaultSandboxType: "proxmox-lxc",
       defaultDiffMode: "unified",
       autoCommitPush: false,
       autoCreatePr: false,
@@ -44,7 +44,7 @@ describe("toUserPreferencesData", () => {
       enabledModelIds: [],
     });
 
-    expect(result.defaultSandboxType).toBe("vercel");
+    expect(result.defaultSandboxType).toBe("proxmox-lxc");
     expect(result.defaultDiffMode).toBe("unified");
   });
 

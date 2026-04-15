@@ -105,7 +105,7 @@ export async function createSandbox(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       repoUrl: cloneUrl,
-      branch: cloneUrl ? (branch ?? "main") : undefined,
+      branch: cloneUrl ? branch : undefined,
       isNewBranch: cloneUrl ? isNewBranch : false,
       sessionId,
       sandboxType: sandboxType ?? getConfiguredSandboxBackend(),

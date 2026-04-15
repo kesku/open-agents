@@ -3,71 +3,22 @@
 import {
   ArrowLeft,
   Cable,
-  LogOut,
   Menu,
   Settings as SettingsIcon,
   SlidersHorizontal,
-  Trophy,
-  User,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { AuthGuard } from "@/components/auth/auth-guard";
 import {
   Sheet,
   SheetContent,
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import { AccountsSectionSkeleton } from "./accounts-section";
-import { LeaderboardSectionSkeleton } from "./leaderboard-section";
-import { ModelVariantsSectionSkeleton } from "./model-variants-section";
-import { PreferencesSectionSkeleton } from "./preferences-section";
-
-/** Skeleton shown while auth is loading for the combined profile page */
-function ProfilePageSkeleton() {
-  return (
-    <div className="flex flex-col gap-8 lg:flex-row lg:gap-10">
-      <div className="w-full shrink-0 lg:w-56">
-        <div className="space-y-6">
-          <div className="flex flex-col items-center gap-3">
-            <Skeleton className="h-20 w-20 rounded-full" />
-            <Skeleton className="h-5 w-32" />
-            <Skeleton className="h-4 w-24" />
-          </div>
-          <div className="space-y-2">
-            <Skeleton className="h-4 w-full" />
-            <Skeleton className="h-4 w-full" />
-            <Skeleton className="h-4 w-full" />
-          </div>
-        </div>
-      </div>
-      <div className="min-w-0 flex-1 space-y-6">
-        <Skeleton className="h-[96px] w-full rounded-md" />
-        <div className="grid gap-3 sm:grid-cols-3">
-          {[1, 2, 3].map((i) => (
-            <Skeleton key={i} className="h-20 rounded-xl" />
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ConnectionsPageSkeleton() {
-  return <AccountsSectionSkeleton />;
-}
 
 const sidebarItems = [
-  {
-    id: "profile",
-    label: "Profile",
-    href: "/settings/profile",
-    icon: User,
-  },
   {
     id: "connections",
     label: "Connections",
@@ -86,21 +37,7 @@ const sidebarItems = [
     href: "/settings/model-variants",
     icon: SlidersHorizontal,
   },
-  {
-    id: "leaderboard",
-    label: "Leaderboard",
-    href: "/settings/leaderboard",
-    icon: Trophy,
-  },
 ];
-
-function handleSignOut() {
-  const form = document.createElement("form");
-  form.method = "POST";
-  form.action = "/api/auth/signout";
-  document.body.appendChild(form);
-  form.submit();
-}
 
 function SettingsLayout({
   children,
@@ -152,20 +89,10 @@ function SettingsLayout({
           </div>
           <nav className="flex-1 px-2 py-2">
             <div className="mb-2 px-4 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-              Settings
+              Workspace
             </div>
             {navItems}
           </nav>
-          <div className="border-t border-border px-2 py-3">
-            <button
-              type="button"
-              onClick={handleSignOut}
-              className="flex w-full items-center gap-3 rounded-md px-4 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-            >
-              <LogOut className="h-4 w-4" />
-              Sign out
-            </button>
-          </div>
         </div>
       </aside>
 
@@ -186,20 +113,10 @@ function SettingsLayout({
           </div>
           <nav className="flex-1 px-2 py-2">
             <div className="mb-2 px-4 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-              Settings
+              Workspace
             </div>
             {navItems}
           </nav>
-          <div className="border-t border-border px-2 py-3">
-            <button
-              type="button"
-              onClick={handleSignOut}
-              className="flex w-full items-center gap-3 rounded-md px-4 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-            >
-              <LogOut className="h-4 w-4" />
-              Sign out
-            </button>
-          </div>
         </SheetContent>
       </Sheet>
 
@@ -226,31 +143,6 @@ function SettingsLayout({
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const activeItem = sidebarItems.find((item) => item.href === pathname);
-  const fallbackTitle = activeItem?.label ?? "Profile";
-  const fallbackContent =
-    activeItem?.id === "connections" ? (
-      <ConnectionsPageSkeleton />
-    ) : activeItem?.id === "preferences" ? (
-      <PreferencesSectionSkeleton />
-    ) : activeItem?.id === "model-variants" ? (
-      <ModelVariantsSectionSkeleton />
-    ) : activeItem?.id === "leaderboard" ? (
-      <LeaderboardSectionSkeleton />
-    ) : (
-      <ProfilePageSkeleton />
-    );
 
-  return (
-    <AuthGuard
-      loadingFallback={
-        <SettingsLayout pathname={pathname}>
-          <h1 className="text-2xl font-semibold">{fallbackTitle}</h1>
-          {fallbackContent}
-        </SettingsLayout>
-      }
-    >
-      <SettingsLayout pathname={pathname}>{children}</SettingsLayout>
-    </AuthGuard>
-  );
+  return <SettingsLayout pathname={pathname}>{children}</SettingsLayout>;
 }

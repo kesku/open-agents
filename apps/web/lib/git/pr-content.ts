@@ -55,13 +55,7 @@ function escapeMarkdownText(value: string): string {
 export function resolvePullRequestAppBaseUrl(
   appBaseUrl?: string,
 ): string | null {
-  const candidates = [
-    appBaseUrl,
-    process.env.VERCEL_URL,
-    process.env.VERCEL_ENV === "production"
-      ? process.env.NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL
-      : null,
-  ];
+  const candidates = [appBaseUrl];
 
   for (const candidate of candidates) {
     const normalized = normalizePullRequestAppBaseUrl(candidate);

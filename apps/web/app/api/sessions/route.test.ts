@@ -1,8 +1,6 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
-import type { VercelProjectSelection } from "@/lib/vercel/types";
 
 let currentSession: {
-  authProvider?: "vercel" | "github";
   user: {
     id: string;
     username: string;
@@ -16,12 +14,7 @@ let currentSession: {
     name: "Nico",
   },
 };
-let existingSessionCount = 0;
-let savedLink: VercelProjectSelection | null = null;
-let currentVercelToken: string | null = "vercel-token";
-let matchingProjects: VercelProjectSelection[] = [];
 const createCalls: Array<Record<string, unknown>> = [];
-const upsertCalls: Array<Record<string, unknown>> = [];
 
 mock.module("@/lib/session/get-server-session", () => ({
   getServerSession: async () => currentSession,
@@ -33,30 +26,14 @@ mock.module("@/lib/random-city", () => ({
 
 mock.module("@/lib/db/user-preferences", () => ({
   getUserPreferences: async () => ({
-    defaultModelId: "anthropic/claude-haiku-4.5",
+    defaultModelId: "openai/gpt-5.4",
     autoCommitPush: false,
     autoCreatePr: false,
-    globalSkillRefs: [{ source: "vercel/ai", skillName: "ai-sdk" }],
+    globalSkillRefs: [{ source: "local/skills", skillName: "ai-sdk" }],
   }),
 }));
 
-mock.module("@/lib/db/vercel-project-links", () => ({
-  getVercelProjectLinkByRepo: async () => savedLink,
-  upsertVercelProjectLink: async (input: Record<string, unknown>) => {
-    upsertCalls.push(input);
-  },
-}));
-
-mock.module("@/lib/vercel/token", () => ({
-  getUserVercelToken: async () => currentVercelToken,
-}));
-
-mock.module("@/lib/vercel/projects", () => ({
-  listMatchingVercelProjects: async () => matchingProjects,
-}));
-
 mock.module("@/lib/db/sessions", () => ({
-  countSessionsByUserId: async () => existingSessionCount,
   createSessionWithInitialChat: async (input: {
     session: Record<string, unknown>;
     initialChat: Record<string, unknown>;
@@ -96,7 +73,7 @@ function createJsonRequest(
   });
 }
 
-describe("/api/sessions POST vercel project linking", () => {
+describe("/api/sessions POST", () => {
   beforeEach(() => {
     currentSession = {
       user: {
@@ -105,145 +82,23 @@ describe("/api/sessions POST vercel project linking", () => {
         name: "Nico",
       },
     };
-    existingSessionCount = 0;
-    savedLink = null;
-    currentVercelToken = "vercel-token";
-    matchingProjects = [];
     createCalls.length = 0;
-    upsertCalls.length = 0;
   });
 
-  test("blocks additional sessions for non-Vercel trial users on the managed deployment", async () => {
+  test("returns 401 when no local workspace session exists", async () => {
+    currentSession = null;
     const { POST } = await routeModulePromise;
 
-    currentSession = {
-      authProvider: "vercel",
-      user: {
-        id: "user-1",
-        username: "nico",
-        name: "Nico",
-        email: "person@example.com",
-      },
-    };
-    existingSessionCount = 1;
-
-    const response = await POST(
-      createJsonRequest(
-        {
-          branch: "main",
-          cloneUrl: "https://github.com/vercel/open-harness",
-          repoOwner: "vercel",
-          repoName: "open-harness",
-        },
-        "https://open-agents.dev/api/sessions",
-      ),
-    );
+    const response = await POST(createJsonRequest({}));
     const body = (await response.json()) as { error: string };
 
-    expect(response.status).toBe(403);
-    expect(body.error).toBe(
-      "This hosted deployment includes 1 trial session for non-Vercel accounts. Deploy your own copy to start more.",
-    );
+    expect(response.status).toBe(401);
+    expect(body.error).toBe("Not authenticated");
     expect(createCalls).toHaveLength(0);
   });
 
-  test("explicit Vercel project is validated against live repo matches before it is persisted", async () => {
+  test("creates a local-first session with the configured sandbox backend", async () => {
     const { POST } = await routeModulePromise;
-
-    const vercelProject: VercelProjectSelection = {
-      projectId: "project-1",
-      projectName: "tampered-name",
-      teamId: "team-x",
-      teamSlug: "tampered-team",
-    };
-    matchingProjects = [
-      {
-        projectId: "project-1",
-        projectName: "app",
-        teamId: "team-1",
-        teamSlug: "acme",
-      },
-    ];
-
-    const response = await POST(
-      createJsonRequest({
-        repoOwner: "Vercel",
-        repoName: "Open-Harness",
-        branch: "main",
-        cloneUrl: "https://github.com/Vercel/Open-Harness",
-        vercelProject,
-      }),
-    );
-    const body = (await response.json()) as {
-      session: Record<string, unknown>;
-    };
-
-    expect(response.status).toBe(200);
-    expect(upsertCalls).toEqual([
-      {
-        userId: "user-1",
-        repoOwner: "Vercel",
-        repoName: "Open-Harness",
-        project: matchingProjects[0],
-      },
-    ]);
-    expect(createCalls[0]).toMatchObject({
-      repoOwner: "Vercel",
-      repoName: "Open-Harness",
-      vercelProjectId: "project-1",
-      vercelProjectName: "app",
-      vercelTeamId: "team-1",
-      vercelTeamSlug: "acme",
-    });
-    expect(body.session.vercelProjectId).toBe("project-1");
-    expect(body.session.vercelProjectName).toBe("app");
-  });
-
-  test("rejects explicit Vercel projects that are not a live match for the repo", async () => {
-    const { POST } = await routeModulePromise;
-
-    matchingProjects = [
-      {
-        projectId: "project-2",
-        projectName: "dashboard",
-        teamId: null,
-        teamSlug: null,
-      },
-    ];
-
-    const response = await POST(
-      createJsonRequest({
-        repoOwner: "vercel",
-        repoName: "open-harness",
-        branch: "main",
-        cloneUrl: "https://github.com/vercel/open-harness",
-        vercelProject: {
-          projectId: "project-999",
-          projectName: "rogue-project",
-          teamId: null,
-          teamSlug: null,
-        },
-      }),
-    );
-    const body = (await response.json()) as { error: string };
-
-    expect(response.status).toBe(400);
-    expect(body.error).toBe(
-      "Selected Vercel project no longer matches this repository",
-    );
-    expect(upsertCalls).toHaveLength(0);
-    expect(createCalls).toHaveLength(0);
-  });
-
-  test("omitting vercelProject falls back to the saved repo link", async () => {
-    const { POST } = await routeModulePromise;
-
-    savedLink = {
-      projectId: "project-2",
-      projectName: "dashboard",
-      teamId: null,
-      teamSlug: null,
-    };
 
     const response = await POST(
       createJsonRequest({
@@ -255,69 +110,42 @@ describe("/api/sessions POST vercel project linking", () => {
     );
     const body = (await response.json()) as {
       session: Record<string, unknown>;
+      chat: Record<string, unknown>;
     };
 
     expect(response.status).toBe(200);
-    expect(upsertCalls).toHaveLength(0);
     expect(createCalls[0]).toMatchObject({
-      vercelProjectId: "project-2",
-      vercelProjectName: "dashboard",
-      vercelTeamId: null,
-      vercelTeamSlug: null,
+      repoOwner: "vercel",
+      repoName: "open-harness",
+      branch: "main",
+      sandboxState: { type: "proxmox-lxc" },
+      globalSkillRefs: [{ source: "local/skills", skillName: "ai-sdk" }],
+      autoCommitPushOverride: false,
+      autoCreatePrOverride: false,
     });
-    expect(body.session.vercelProjectName).toBe("dashboard");
+    expect(body.session.sandboxState).toEqual({ type: "proxmox-lxc" });
+    expect(body.chat.modelId).toBe("openai/gpt-5.4");
   });
 
-  test("explicit null suppresses Vercel linking for that session", async () => {
-    const { POST } = await routeModulePromise;
-
-    savedLink = {
-      projectId: "project-2",
-      projectName: "dashboard",
-      teamId: null,
-      teamSlug: null,
-    };
-
-    const response = await POST(
-      createJsonRequest({
-        repoOwner: "vercel",
-        repoName: "open-harness",
-        branch: "main",
-        cloneUrl: "https://github.com/vercel/open-harness",
-        vercelProject: null,
-      }),
-    );
-    const body = (await response.json()) as {
-      session: Record<string, unknown>;
-    };
-
-    expect(response.status).toBe(200);
-    expect(upsertCalls).toHaveLength(0);
-    expect(createCalls[0]).toMatchObject({
-      vercelProjectId: null,
-      vercelProjectName: null,
-      vercelTeamId: null,
-      vercelTeamSlug: null,
-    });
-    expect(body.session.vercelProjectId).toBeNull();
-  });
-
-  test("new sessions snapshot the user global skill refs", async () => {
+  test("generates a new branch name when requested", async () => {
     const { POST } = await routeModulePromise;
 
     const response = await POST(
       createJsonRequest({
         repoOwner: "vercel",
         repoName: "open-harness",
-        branch: "main",
         cloneUrl: "https://github.com/vercel/open-harness",
+        isNewBranch: true,
       }),
     );
 
     expect(response.status).toBe(200);
     expect(createCalls[0]).toMatchObject({
-      globalSkillRefs: [{ source: "vercel/ai", skillName: "ai-sdk" }],
+      isNewBranch: true,
     });
+    expect(createCalls[0]?.branch).toEqual(
+      expect.stringMatching(/^n\/[a-f0-9]{8}$/),
+    );
   });
 
   test("rejects invalid repository owners", async () => {
@@ -338,7 +166,7 @@ describe("/api/sessions POST vercel project linking", () => {
     expect(createCalls).toHaveLength(0);
   });
 
-  test("persists autoCreatePr when autoCommitPush is enabled", async () => {
+  test("persists autoCreatePr only when autoCommitPush is enabled", async () => {
     const { POST } = await routeModulePromise;
 
     const response = await POST(
@@ -347,15 +175,15 @@ describe("/api/sessions POST vercel project linking", () => {
         repoName: "open-harness",
         branch: "feature/auto-pr",
         cloneUrl: "https://github.com/vercel/open-harness",
-        autoCommitPush: true,
+        autoCommitPush: false,
         autoCreatePr: true,
       }),
     );
 
     expect(response.status).toBe(200);
     expect(createCalls[0]).toMatchObject({
-      autoCommitPushOverride: true,
-      autoCreatePrOverride: true,
+      autoCommitPushOverride: false,
+      autoCreatePrOverride: false,
     });
   });
 });

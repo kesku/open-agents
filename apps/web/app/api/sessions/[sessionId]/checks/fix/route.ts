@@ -92,7 +92,7 @@ function formatFixResponse(
 /**
  * Builds a "fix failing checks" prompt plus native snippet attachments.
  *
- * Requires the GitHub App to have `actions: read` permission.
+ * Requires the configured server GitHub token to have access to Actions logs.
  *
  * Request body:
  *   { checkRuns: PullRequestCheckRun[] } — the failing check runs

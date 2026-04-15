@@ -10,7 +10,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { useGitHubConnectionStatus } from "@/hooks/use-github-connection-status";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -24,8 +23,8 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { useGitHubAccounts } from "@/hooks/use-github-accounts";
+import { useSession } from "@/hooks/use-session";
 import type { Session } from "@/lib/db/schema";
-import { buildGitHubReconnectUrl } from "@/lib/github/connection-status";
 
 interface CreateRepoDialogProps {
   open: boolean;
@@ -45,10 +44,6 @@ interface CreateRepoResult {
   repoUrl: string;
   owner: string;
   repoName: string;
-}
-
-function getCurrentPathWithSearch(): string {
-  return `${window.location.pathname}${window.location.search}`;
 }
 
 function slugify(text: string): string {
@@ -75,14 +70,10 @@ export function CreateRepoDialog({
   const [result, setResult] = useState<CreateRepoResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedOwner, setSelectedOwner] = useState<string>("");
-  const { reconnectRequired } = useGitHubConnectionStatus({ enabled: open });
-
-  const handleReconnect = () => {
-    window.location.href = buildGitHubReconnectUrl(getCurrentPathWithSearch());
-  };
+  const { hasGitHub } = useSession();
 
   const { accounts, isLoading: loadingAccounts } = useGitHubAccounts(
-    open && !reconnectRequired,
+    open && hasGitHub,
   );
 
   // Reset form state when dialog opens
@@ -115,8 +106,10 @@ export function CreateRepoDialog({
       return;
     }
 
-    if (reconnectRequired) {
-      setError("Reconnect GitHub before creating a repository.");
+    if (!hasGitHub) {
+      setError(
+        "Configure LOCAL_GITHUB_ACCESS_TOKEN before creating a repository.",
+      );
       return;
     }
 
@@ -217,20 +210,12 @@ export function CreateRepoDialog({
               {/* Owner / Account Picker */}
               <div className="grid gap-2">
                 <Label htmlFor="repo-owner">Owner</Label>
-                {reconnectRequired ? (
+                {!hasGitHub ? (
                   <div className="space-y-3 rounded-md border border-amber-500/20 bg-amber-500/5 p-3">
                     <p className="text-sm text-muted-foreground">
-                      Your saved GitHub connection is no longer valid. Reconnect
-                      before creating a repository.
+                      Configure LOCAL_GITHUB_ACCESS_TOKEN on the server before
+                      creating a repository from this workspace.
                     </p>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={handleReconnect}
-                    >
-                      Reconnect GitHub
-                    </Button>
                   </div>
                 ) : loadingAccounts ? (
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -335,7 +320,7 @@ export function CreateRepoDialog({
                 onClick={handleCreate}
                 disabled={
                   isCreating ||
-                  reconnectRequired ||
+                  !hasGitHub ||
                   !repoName.trim() ||
                   !hasSandbox ||
                   !selectedOwner

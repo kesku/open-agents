@@ -38,8 +38,6 @@ import {
   hasResumableSandboxState,
 } from "@/lib/sandbox/utils";
 import { getServerSession } from "@/lib/session/get-server-session";
-// import { buildDevelopmentDotenvFromVercelProject } from "@/lib/vercel/projects";
-// import { getUserVercelToken } from "@/lib/vercel/token";
 
 interface CreateSandboxRequest {
   repoUrl?: string;
@@ -48,36 +46,6 @@ interface CreateSandboxRequest {
   sessionId?: string;
   sandboxType?: "vercel" | "proxmox-lxc";
 }
-
-// async function syncVercelProjectEnvVarsToSandbox(params: {
-//   userId: string;
-//   sessionRecord: SessionRecord;
-//   sandbox: Awaited<ReturnType<typeof connectSandbox>>;
-// }): Promise<void> {
-//   if (!params.sessionRecord.vercelProjectId) {
-//     return;
-//   }
-//
-//   const token = await getUserVercelToken(params.userId);
-//   if (!token) {
-//     return;
-//   }
-//
-//   const dotenvContent = await buildDevelopmentDotenvFromVercelProject({
-//     token,
-//     projectIdOrName: params.sessionRecord.vercelProjectId,
-//     teamId: params.sessionRecord.vercelTeamId,
-//   });
-//   if (!dotenvContent) {
-//     return;
-//   }
-//
-//   await params.sandbox.writeFile(
-//     `${params.sandbox.workingDirectory}/.env.local`,
-//     dotenvContent,
-//     "utf-8",
-//   );
-// }
 
 async function syncVercelCliAuthForSandbox(params: {
   userId: string;
@@ -122,7 +90,7 @@ export async function POST(req: Request) {
     return Response.json({ error: "Invalid sandbox type" }, { status: 400 });
   }
 
-  const { repoUrl, branch = "main", isNewBranch = false, sessionId } = body;
+  const { repoUrl, branch, isNewBranch = false, sessionId } = body;
   const sandboxType = body.sandboxType ?? getConfiguredSandboxBackend();
 
   // Get session for auth
@@ -187,8 +155,8 @@ export async function POST(req: Request) {
   const source = repoUrl
     ? {
         repo: repoUrl,
-        branch: isNewBranch ? undefined : branch,
-        newBranch: isNewBranch ? branch : undefined,
+        ...(!isNewBranch && branch ? { branch } : {}),
+        ...(isNewBranch && branch ? { newBranch: branch } : {}),
       }
     : undefined;
 
@@ -242,20 +210,6 @@ export async function POST(req: Request) {
       });
 
       if (sessionRecord && sandboxType === "vercel") {
-        // TODO: Re-enable this once we have a solid exfiltration defense strategy.
-        // try {
-        //   await syncVercelProjectEnvVarsToSandbox({
-        //     userId: session.user.id,
-        //     sessionRecord,
-        //     sandbox,
-        //   });
-        // } catch (error) {
-        //   console.error(
-        //     `Failed to sync Vercel env vars for session ${sessionRecord.id}:`,
-        //     error,
-        //   );
-        // }
-
         try {
           await syncVercelCliAuthForSandbox({
             userId: session.user.id,

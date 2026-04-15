@@ -2,7 +2,6 @@ import type { Sandbox } from "@open-harness/sandbox";
 import { gateway } from "@open-harness/agent";
 import { generateText } from "ai";
 import { getGitHubAccount } from "@/lib/db/accounts";
-import { getAppCoAuthorTrailer } from "@/lib/github/app-auth";
 import { createRepository } from "@/lib/github/client";
 import { withSessionGitMutation } from "@/lib/git/session-git-mutation";
 import { DEFAULT_FAST_MODEL_ID } from "@/lib/models";
@@ -238,14 +237,10 @@ Respond with ONLY the commit message, nothing else.`,
         commitMessage = "feat: initial commit";
       }
 
-      // 13. Create commit with Co-Authored-By trailer for the agent app
+      // 13. Create the initial commit with the authenticated GitHub identity
       const escapedMessage = commitMessage.replace(/'/g, "'\\''");
-      const coAuthorTrailer = await getAppCoAuthorTrailer();
-      const trailerArg = coAuthorTrailer
-        ? ` -m '${coAuthorTrailer.replace(/'/g, "'\\''")}'`
-        : "";
       const commitResult = await sandbox.exec(
-        `git commit -m '${escapedMessage}'${trailerArg}`,
+        `git commit -m '${escapedMessage}'`,
         cwd,
         10000,
       );

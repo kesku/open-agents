@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { ThemeToggle } from "./theme-toggle";
 
 export function LandingFooter() {
@@ -21,6 +22,12 @@ export function LandingFooter() {
               Product
             </div>
             <div className="mt-4 flex flex-col gap-2">
+              <Link
+                href="/sessions"
+                className="font-mono text-sm text-(--l-fg-3) transition-colors hover:text-(--l-fg)"
+              >
+                Open App
+              </Link>
               <a
                 href="https://ai-sdk.dev/"
                 target="_blank"
@@ -30,28 +37,20 @@ export function LandingFooter() {
                 AI SDK
               </a>
               <a
-                href="https://vercel.com/ai-gateway"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="font-mono text-sm text-(--l-fg-3) transition-colors hover:text-(--l-fg)"
-              >
-                AI Gateway
-              </a>
-              <a
-                href="https://vercel.com/sandbox"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="font-mono text-sm text-(--l-fg-3) transition-colors hover:text-(--l-fg)"
-              >
-                Sandbox
-              </a>
-              <a
                 href="https://useworkflow.dev/"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="font-mono text-sm text-(--l-fg-3) transition-colors hover:text-(--l-fg)"
               >
                 Workflow SDK
+              </a>
+              <a
+                href="https://cli.github.com/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-mono text-sm text-(--l-fg-3) transition-colors hover:text-(--l-fg)"
+              >
+                GitHub CLI
               </a>
             </div>
           </div>
@@ -62,21 +61,19 @@ export function LandingFooter() {
             </div>
             <div className="mt-4 flex flex-col gap-2">
               <a
-                href="https://github.com/vercel-labs/open-harness"
+                href="https://github.com/kesku/open-agents"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-sm text-(--l-fg-3) transition-colors hover:text-(--l-fg)"
               >
                 GitHub
               </a>
-              <a
-                href="https://vercel.com"
-                target="_blank"
-                rel="noopener noreferrer"
+              <Link
+                href="/settings/connections"
                 className="text-sm text-(--l-fg-3) transition-colors hover:text-(--l-fg)"
               >
-                Vercel
-              </a>
+                Connections
+              </Link>
               <a
                 href="https://ai-sdk.dev/docs/introduction"
                 target="_blank"
@@ -91,19 +88,12 @@ export function LandingFooter() {
 
         <div className="mt-10 flex items-center justify-between">
           <a
-            href="https://vercel.com"
+            href="https://github.com/kesku/open-agents"
             target="_blank"
             rel="noopener noreferrer"
-            className="text-(--l-fg-4) transition-colors hover:text-(--l-fg-2)"
+            className="text-sm text-(--l-fg-4) transition-colors hover:text-(--l-fg-2)"
           >
-            <svg
-              viewBox="0 0 76 65"
-              className="h-4"
-              fill="currentColor"
-              aria-hidden="true"
-            >
-              <path d="M37.5274 0L75.0548 65H0L37.5274 0Z" />
-            </svg>
+            kesku/open-agents
           </a>
           <ThemeToggle />
         </div>

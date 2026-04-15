@@ -1,35 +1,9 @@
-import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 let sessionRecord: { userId: string } | null = null;
 let chats: Array<{ id: string }> = [];
 let userRecord: { name: string | null; username: string | null } | null = null;
 let githubAccount: { username: string } | null = null;
-
-const originalVercelUrl = process.env.VERCEL_URL;
-const originalVercelEnv = process.env.VERCEL_ENV;
-const originalProductionUrl =
-  process.env.NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL;
-
-function restoreEnv() {
-  if (originalVercelUrl === undefined) {
-    delete process.env.VERCEL_URL;
-  } else {
-    process.env.VERCEL_URL = originalVercelUrl;
-  }
-
-  if (originalVercelEnv === undefined) {
-    delete process.env.VERCEL_ENV;
-  } else {
-    process.env.VERCEL_ENV = originalVercelEnv;
-  }
-
-  if (originalProductionUrl === undefined) {
-    delete process.env.NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL;
-  } else {
-    process.env.NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL =
-      originalProductionUrl;
-  }
-}
 
 mock.module("@/app/api/generate-pr/_lib/generate-pr-helpers", () => ({
   getConversationContext: async () => "",
@@ -62,11 +36,6 @@ describe("pr-content", () => {
     chats = [];
     userRecord = null;
     githubAccount = null;
-    restoreEnv();
-  });
-
-  afterEach(() => {
-    restoreEnv();
   });
 
   test("resolvePullRequestContextSection returns a single-line footer with chat link and attribution", async () => {
@@ -100,21 +69,13 @@ describe("pr-content", () => {
     expect(section).toBe("Built with guidance from nico");
   });
 
-  test("resolvePullRequestAppBaseUrl prefers the active deployment url", async () => {
+  test("resolvePullRequestAppBaseUrl uses the provided app origin", async () => {
     const { resolvePullRequestAppBaseUrl } = await prContentModulePromise;
 
-    process.env.VERCEL_URL = "preview-openharness.vercel.app";
-    process.env.VERCEL_ENV = "preview";
-    process.env.NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL = "openharness.dev";
-
-    expect(resolvePullRequestAppBaseUrl()).toBe(
-      "https://preview-openharness.vercel.app",
+    expect(resolvePullRequestAppBaseUrl("http://192.168.1.141:3000")).toBe(
+      "http://192.168.1.141:3000",
     );
-
-    delete process.env.VERCEL_URL;
-    process.env.VERCEL_ENV = "production";
-
-    expect(resolvePullRequestAppBaseUrl()).toBe("https://openharness.dev");
+    expect(resolvePullRequestAppBaseUrl()).toBeNull();
   });
 
   test("appendPullRequestContextSection appends the footer after a horizontal rule", async () => {

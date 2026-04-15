@@ -4,29 +4,9 @@ import { eq } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { users } from "@/lib/db/schema";
 import type { Session } from "./types";
-
-function getOptionalEnvString(name: string): string | undefined {
-  const value = process.env[name]?.trim();
-  return value ? value : undefined;
-}
-
-export function isLocalAuthEnabled(): boolean {
-  return process.env.LOCAL_AUTH_ENABLED === "true";
-}
-
-function getLocalAuthUser() {
-  return {
-    id: getOptionalEnvString("LOCAL_AUTH_USER_ID") ?? "local-user",
-    username: getOptionalEnvString("LOCAL_AUTH_USERNAME") ?? "local",
-    email:
-      getOptionalEnvString("LOCAL_AUTH_EMAIL") ?? "local@open-agents.local",
-    name: getOptionalEnvString("LOCAL_AUTH_NAME") ?? "Local User",
-    avatar: getOptionalEnvString("LOCAL_AUTH_AVATAR_URL") ?? "/favicon.ico",
-  };
-}
+import { LOCAL_WORKSPACE_USER } from "./local-workspace-user";
 
 async function ensureLocalUserRecord(): Promise<Session["user"]> {
-  const localUser = getLocalAuthUser();
   const [existingUser] = await db
     .select({
       id: users.id,
@@ -36,55 +16,51 @@ async function ensureLocalUserRecord(): Promise<Session["user"]> {
       avatarUrl: users.avatarUrl,
     })
     .from(users)
-    .where(eq(users.id, localUser.id))
+    .where(eq(users.id, LOCAL_WORKSPACE_USER.id))
     .limit(1);
 
   const now = new Date();
 
   if (!existingUser) {
     await db.insert(users).values({
-      id: localUser.id,
-      provider: "vercel",
-      externalId: `local:${localUser.id}`,
+      id: LOCAL_WORKSPACE_USER.id,
+      provider: "local",
+      externalId: `local:${LOCAL_WORKSPACE_USER.id}`,
       accessToken: "local-auth",
-      username: localUser.username,
-      email: localUser.email,
-      name: localUser.name,
-      avatarUrl: localUser.avatar,
+      username: LOCAL_WORKSPACE_USER.username,
+      email: LOCAL_WORKSPACE_USER.email,
+      name: LOCAL_WORKSPACE_USER.name,
+      avatarUrl: LOCAL_WORKSPACE_USER.avatar,
       createdAt: now,
       updatedAt: now,
       lastLoginAt: now,
     });
 
-    return localUser;
+    return LOCAL_WORKSPACE_USER;
   }
 
   if (
-    existingUser.username !== localUser.username ||
-    existingUser.email !== localUser.email ||
-    existingUser.name !== localUser.name ||
-    existingUser.avatarUrl !== localUser.avatar
+    existingUser.username !== LOCAL_WORKSPACE_USER.username ||
+    existingUser.email !== LOCAL_WORKSPACE_USER.email ||
+    existingUser.name !== LOCAL_WORKSPACE_USER.name ||
+    existingUser.avatarUrl !== LOCAL_WORKSPACE_USER.avatar
   ) {
     await db
       .update(users)
       .set({
-        username: localUser.username,
-        email: localUser.email,
-        name: localUser.name,
-        avatarUrl: localUser.avatar,
+        username: LOCAL_WORKSPACE_USER.username,
+        email: LOCAL_WORKSPACE_USER.email,
+        name: LOCAL_WORKSPACE_USER.name,
+        avatarUrl: LOCAL_WORKSPACE_USER.avatar,
         updatedAt: now,
       })
-      .where(eq(users.id, localUser.id));
+      .where(eq(users.id, LOCAL_WORKSPACE_USER.id));
   }
 
-  return localUser;
+  return LOCAL_WORKSPACE_USER;
 }
 
-export async function getLocalAuthSession(): Promise<Session | undefined> {
-  if (!isLocalAuthEnabled()) {
-    return undefined;
-  }
-
+export async function getLocalAuthSession(): Promise<Session> {
   const user = await ensureLocalUserRecord();
   return {
     created: Date.now(),

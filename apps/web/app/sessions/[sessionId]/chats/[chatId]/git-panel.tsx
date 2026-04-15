@@ -11,7 +11,6 @@ import {
   GitMerge,
   GitPullRequest,
   GitPullRequestClosed,
-  Globe,
   Loader2,
   RefreshCw,
   Sparkles,
@@ -50,6 +49,7 @@ import {
   MERGE_READINESS_POLL_INTERVAL_MS,
   shouldPollMergeReadiness,
 } from "@/lib/merge-readiness-polling";
+import { createClientId } from "@/lib/client-id";
 import { cn } from "@/lib/utils";
 import {
   commitAndPushSessionChanges,
@@ -94,11 +94,6 @@ type GitPanelProps = {
   hasRepo: boolean;
   hasExistingPr: boolean;
   existingPrUrl: string | null;
-  prDeploymentUrl: string | null;
-  buildingDeploymentUrl: string | null;
-  failedDeploymentUrl: string | null;
-  isDeploymentStale: boolean;
-  isDeploymentFailed: boolean;
   hasUncommittedGitChanges: boolean;
   supportsRepoCreation: boolean;
   hasDiff: boolean;
@@ -682,7 +677,7 @@ function InlinePrCreatePanel({
     setIsCreatingPr(true);
     setPrError(null);
 
-    const gitMessageId = crypto.randomUUID();
+    const gitMessageId = createClientId("git");
     const prPartId = `${gitMessageId}:pr`;
 
     try {
@@ -1249,7 +1244,7 @@ function InlineMergePanel({
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Idempotency-Key": crypto.randomUUID(),
+          "Idempotency-Key": createClientId("pr"),
         },
         body: JSON.stringify({
           mergeMethod,
@@ -1646,11 +1641,6 @@ export function GitPanel(props: GitPanelProps) {
     hasRepo,
     hasExistingPr,
     existingPrUrl,
-    prDeploymentUrl,
-    buildingDeploymentUrl,
-    failedDeploymentUrl,
-    isDeploymentStale,
-    isDeploymentFailed,
     hasUncommittedGitChanges,
     supportsRepoCreation,
     hasDiff,
@@ -1713,11 +1703,6 @@ export function GitPanel(props: GitPanelProps) {
   const hasUnstagedChanges =
     (gitStatus?.unstagedCount ?? 0) > 0 ||
     Boolean(diffFiles?.some(isUncommittedFile));
-  const showPreviewButton =
-    Boolean(prDeploymentUrl) || isDeploymentStale || isDeploymentFailed;
-  const previewTargetUrl = isDeploymentStale
-    ? buildingDeploymentUrl
-    : (prDeploymentUrl ?? (isDeploymentFailed ? failedDeploymentUrl : null));
 
   const canOpenPrTab =
     hasExistingPr ||
@@ -1795,29 +1780,6 @@ export function GitPanel(props: GitPanelProps) {
         </div>
 
         <div className="ml-auto flex shrink-0 items-center gap-2">
-          {showPreviewButton && previewTargetUrl && (
-            /* oxlint-disable-next-line nextjs/no-html-link-for-pages */
-            <a
-              href={previewTargetUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-xs font-medium text-foreground transition-colors hover:bg-accent"
-            >
-              <Globe
-                className={cn(
-                  "h-3.5 w-3.5",
-                  isDeploymentFailed && "text-red-500",
-                  !isDeploymentFailed && !isDeploymentStale && "text-green-500",
-                  !isDeploymentFailed &&
-                    isDeploymentStale &&
-                    "text-amber-500 animate-pulse",
-                )}
-              />
-              Preview
-              <ExternalLink className="h-3 w-3 text-muted-foreground" />
-            </a>
-          )}
-
           {!hasRepo && supportsRepoCreation && (
             <Button
               size="sm"

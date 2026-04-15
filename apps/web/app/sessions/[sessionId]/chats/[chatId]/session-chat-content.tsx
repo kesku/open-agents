@@ -42,10 +42,8 @@ import {
   useSyncExternalStore,
 } from "react";
 import { createPortal } from "react-dom";
-import useSWR from "swr";
 import type { ChatRefreshResponse } from "@/app/api/sessions/[sessionId]/chats/[chatId]/route";
 import type { MergePullRequestResponse } from "@/app/api/sessions/[sessionId]/merge/route";
-import type { PrDeploymentResponse } from "@/app/api/sessions/[sessionId]/pr-deployment/route";
 import type { PullRequestCheckRun } from "@/lib/github/client";
 import type {
   WebAgentCommitDataPart,
@@ -115,8 +113,6 @@ import {
   DEFAULT_CONTEXT_LIMIT,
   estimateModelUsageCost,
 } from "@/lib/models";
-import { getPrDeploymentRefreshInterval } from "@/lib/pr-deployment-polling";
-import { fetcher } from "@/lib/swr";
 import { streamdownPlugins } from "@/lib/streamdown-config";
 import { cn } from "@/lib/utils";
 import {
@@ -812,11 +808,7 @@ function ShareDialog({
   const [isLoading, setIsLoading] = useState(false);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [baseUrl, setBaseUrl] = useState<string | null>(
-    process.env.NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL
-      ? `https://${process.env.NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL}`
-      : null,
-  );
+  const [baseUrl, setBaseUrl] = useState<string | null>(null);
 
   useEffect(() => {
     if (!baseUrl) {
@@ -1032,8 +1024,6 @@ export function SessionChatContent({
   const [copiedAssistantMessageId, setCopiedAssistantMessageId] = useState<
     string | null
   >(null);
-  const [branchPreviewUrlChangeBaseline, setBranchPreviewUrlChangeBaseline] =
-    useState<string | null | undefined>(undefined);
   const hasMounted = useHasMounted();
   const {
     activeView,
@@ -1237,7 +1227,7 @@ export function SessionChatContent({
     session.repoName &&
     (session.autoCommitPushOverride ?? preferences?.autoCommitPush ?? false),
   );
-  const { isAutoCommitting, markAutoCommitStarted } = useAutoCommitStatus(
+  const { markAutoCommitStarted } = useAutoCommitStatus(
     autoCommitEnabled,
     gitStatus,
     () => {
@@ -2754,109 +2744,11 @@ export function SessionChatContent({
 
   const hasRepo = Boolean(session.cloneUrl);
   const hasExistingPr = session.prNumber != null;
-  const previewLookupBranch =
-    gitStatus?.branch && gitStatus.branch !== "HEAD"
-      ? gitStatus.branch
-      : session.branch;
-  const hasBranchPreviewLookup = Boolean(
-    session.vercelProjectId && previewLookupBranch,
-  );
   const existingPrUrl =
     hasExistingPr && session.repoOwner && session.repoName
       ? `https://github.com/${session.repoOwner}/${session.repoName}/pull/${session.prNumber}`
       : null;
-  const prDeploymentQuery = new URLSearchParams(
-    Object.entries({
-      ...(hasExistingPr ? { prNumber: String(session.prNumber) } : {}),
-      ...(previewLookupBranch ? { branch: previewLookupBranch } : {}),
-    }),
-  ).toString();
-  const { data: prDeploymentData, mutate: refreshPrDeployment } =
-    useSWR<PrDeploymentResponse>(
-      hasExistingPr || hasBranchPreviewLookup
-        ? `/api/sessions/${session.id}/pr-deployment${
-            prDeploymentQuery ? `?${prDeploymentQuery}` : ""
-          }`
-        : null,
-      fetcher,
-      {
-        revalidateOnFocus: true,
-        revalidateOnReconnect: true,
-        // Poll while we're still waiting for the first deployment, or while a
-        // branch preview is rolling forward to a newer deployment after a push.
-        refreshInterval: (latestData) =>
-          getPrDeploymentRefreshInterval({
-            shouldPoll: hasExistingPr || hasBranchPreviewLookup,
-            deploymentUrl: latestData?.deploymentUrl,
-            documentHasFocus:
-              typeof document === "undefined" ? true : document.hasFocus(),
-            waitForDeploymentUrlChangeFrom: branchPreviewUrlChangeBaseline,
-          }),
-        shouldRetryOnError: false,
-      },
-    );
-  const prDeploymentUrl = prDeploymentData?.deploymentUrl ?? null;
-  const buildingDeploymentUrl = prDeploymentData?.buildingDeploymentUrl ?? null;
-  const failedDeploymentUrl = prDeploymentData?.failedDeploymentUrl ?? null;
-
-  useEffect(() => {
-    if (!hasExistingPr && !hasBranchPreviewLookup) {
-      if (branchPreviewUrlChangeBaseline !== undefined) {
-        setBranchPreviewUrlChangeBaseline(undefined);
-      }
-      return;
-    }
-
-    if (branchPreviewUrlChangeBaseline === undefined) {
-      return;
-    }
-
-    if (prDeploymentUrl !== branchPreviewUrlChangeBaseline) {
-      setBranchPreviewUrlChangeBaseline(undefined);
-    }
-  }, [
-    hasExistingPr,
-    hasBranchPreviewLookup,
-    branchPreviewUrlChangeBaseline,
-    prDeploymentUrl,
-  ]);
-
-  const isDeploymentStale = branchPreviewUrlChangeBaseline !== undefined;
-  const isDeploymentFailed =
-    !prDeploymentUrl &&
-    !buildingDeploymentUrl &&
-    !hasExistingPr &&
-    Boolean(failedDeploymentUrl);
-  const previewDeploymentTargetUrl =
-    (isDeploymentStale ? buildingDeploymentUrl : null) ??
-    prDeploymentUrl ??
-    (isDeploymentFailed ? failedDeploymentUrl : null);
-  const showHeaderActions =
-    canRunDevServer || Boolean(previewDeploymentTargetUrl);
-
-  // When auto-commit lands (transitions from committing to clean), mark the
-  // current preview deployment as stale so the UI shows "Deploying…" until
-  // the new Vercel build finishes.
-  const prevIsAutoCommittingRef = useRef(isAutoCommitting);
-  useEffect(() => {
-    const wasAutoCommitting = prevIsAutoCommittingRef.current;
-    prevIsAutoCommittingRef.current = isAutoCommitting;
-
-    if (
-      wasAutoCommitting &&
-      !isAutoCommitting &&
-      (hasExistingPr || hasBranchPreviewLookup)
-    ) {
-      setBranchPreviewUrlChangeBaseline(prDeploymentUrl);
-      refreshPrDeployment().catch(() => undefined);
-    }
-  }, [
-    isAutoCommitting,
-    hasExistingPr,
-    hasBranchPreviewLookup,
-    prDeploymentUrl,
-    refreshPrDeployment,
-  ]);
+  const showHeaderActions = canRunDevServer;
 
   const hasUncommittedGitChanges = gitStatus?.hasUncommittedChanges ?? false;
   const hasUnpushedCommits = gitStatus?.hasUnpushedCommits ?? false;
@@ -2894,30 +2786,13 @@ export function SessionChatContent({
   const hasOpenPr = hasExistingPr && session.prStatus === "open";
   const canCloseAndArchive = hasOpenPr && !isArchived;
   const handleCommitted = useCallback(async () => {
-    if (hasExistingPr || hasBranchPreviewLookup) {
-      setBranchPreviewUrlChangeBaseline(prDeploymentUrl);
-    }
-
     await Promise.all([
       refreshGitStatus().catch(() => undefined),
       refreshDiff().catch(() => undefined),
       refreshFiles().catch(() => undefined),
       checkBranchAndPr().catch(() => undefined),
     ]);
-
-    if (hasExistingPr || hasBranchPreviewLookup) {
-      await refreshPrDeployment().catch(() => undefined);
-    }
-  }, [
-    hasExistingPr,
-    hasBranchPreviewLookup,
-    prDeploymentUrl,
-    refreshGitStatus,
-    refreshDiff,
-    refreshFiles,
-    checkBranchAndPr,
-    refreshPrDeployment,
-  ]);
+  }, [refreshGitStatus, refreshDiff, refreshFiles, checkBranchAndPr]);
 
   const handleMerged = useCallback(
     async (mergeResult: MergePullRequestResponse) => {
@@ -2984,11 +2859,6 @@ export function SessionChatContent({
       hasRepo={hasRepo}
       hasExistingPr={hasExistingPr}
       existingPrUrl={existingPrUrl}
-      prDeploymentUrl={prDeploymentUrl}
-      buildingDeploymentUrl={buildingDeploymentUrl}
-      failedDeploymentUrl={failedDeploymentUrl}
-      isDeploymentStale={isDeploymentStale}
-      isDeploymentFailed={isDeploymentFailed}
       hasUncommittedGitChanges={hasUncommittedGitChanges}
       supportsRepoCreation={supportsRepoCreation}
       hasDiff={Boolean(diff || session.cachedDiff)}
@@ -3125,47 +2995,6 @@ export function SessionChatContent({
                   )}
                 </div>
               </>
-            )}
-            {previewDeploymentTargetUrl && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    asChild
-                    variant="ghost"
-                    size="icon"
-                    className="hidden h-7 w-7 sm:inline-flex"
-                  >
-                    <a
-                      href={previewDeploymentTargetUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      aria-label={
-                        isDeploymentStale
-                          ? "Open latest preview deployment (building)"
-                          : "Open latest preview deployment"
-                      }
-                    >
-                      <Globe
-                        className={cn(
-                          "h-3.5 w-3.5",
-                          isDeploymentFailed && "text-red-500",
-                          !isDeploymentFailed &&
-                            !isDeploymentStale &&
-                            "text-green-500",
-                          !isDeploymentFailed &&
-                            isDeploymentStale &&
-                            "animate-pulse text-amber-500",
-                        )}
-                      />
-                    </a>
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom">
-                  {isDeploymentStale
-                    ? "Open latest preview deployment (building)"
-                    : "Open latest preview deployment"}
-                </TooltipContent>
-              </Tooltip>
             )}
           </div>,
           headerActionsRef.current,

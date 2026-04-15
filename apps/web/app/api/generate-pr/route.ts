@@ -26,7 +26,6 @@ import {
 } from "@/lib/git/session-git-mutation";
 import { generatePullRequestContentFromSandbox } from "@/lib/git/pr-content";
 import { getUserGitHubToken } from "@/lib/github/user-token";
-import { getAppCoAuthorTrailer } from "@/lib/github/app-auth";
 import { isSandboxActive } from "@/lib/sandbox/utils";
 import { getServerSession } from "@/lib/session/get-server-session";
 import { DEFAULT_FAST_MODEL_ID } from "@/lib/models";
@@ -389,9 +388,8 @@ Respond with ONLY the commit message, nothing else.`,
           // Using single quotes is safest, but we need to handle single quotes in the message
           // by ending the quote, adding an escaped single quote, and starting a new quote
           //
-          // Set the git author identity to the authenticated user so the commit is
-          // attributed to them. A Co-Authored-By trailer is appended for the GitHub
-          // App bot so the agent's involvement is visible in the commit history.
+          // Set the git author identity to the authenticated user so the commit
+          // is attributed to them.
           const githubAccount = await getGitHubAccount(session.user.id);
           if (githubAccount?.externalUserId && githubAccount.username) {
             const userEmail = `${githubAccount.externalUserId}+${githubAccount.username}@users.noreply.github.com`;
@@ -408,14 +406,10 @@ Respond with ONLY the commit message, nothing else.`,
           }
 
           const escapedMessage = commitMessage.replace(/'/g, "'\\''");
-          const coAuthorTrailer = await getAppCoAuthorTrailer();
-          const trailerArg = coAuthorTrailer
-            ? ` -m '${coAuthorTrailer.replace(/'/g, "'\\''")}'`
-            : "";
           const commitCommand =
             useManualCommitMessage && normalizedManualBody.length > 0
-              ? `git commit -m '${escapedMessage}' -m '${normalizedManualBody.replace(/'/g, "'\\''")}'${trailerArg}`
-              : `git commit -m '${escapedMessage}'${trailerArg}`;
+              ? `git commit -m '${escapedMessage}' -m '${normalizedManualBody.replace(/'/g, "'\\''")}'`
+              : `git commit -m '${escapedMessage}'`;
           const commitResult = await sandbox.exec(commitCommand, cwd, 10000);
 
           if (!commitResult.success) {

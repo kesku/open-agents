@@ -4,7 +4,7 @@
 export interface Source {
   /** GitHub repository URL (e.g., "https://github.com/owner/repo") */
   repo: string;
-  /** Branch to clone (defaults to "main") */
+  /** Optional branch to clone. When omitted, the remote default branch is used. */
   branch?: string;
   /** Token for authenticated git access (e.g., GitHub PAT). Enables push operations. */
   token?: string;

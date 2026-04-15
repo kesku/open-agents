@@ -3,9 +3,9 @@ import { redirect } from "next/navigation";
 
 export const metadata: Metadata = {
   title: "Settings",
-  description: "Manage your Open Agents account settings.",
+  description: "Manage your local Open Agents workspace settings.",
 };
 
 export default function SettingsPage() {
-  redirect("/settings/profile");
+  redirect("/settings/preferences");
 }

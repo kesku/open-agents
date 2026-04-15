@@ -1,4 +1,5 @@
 import "server-only";
+import { LOCAL_WORKSPACE_USER_ID } from "@/lib/session/local-workspace-user";
 
 const LOCAL_GITHUB_PROFILE_CACHE_TTL_MS = 5 * 60 * 1000;
 
@@ -26,15 +27,7 @@ function getOptionalEnvString(name: string): string | undefined {
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
-function getLocalAuthUserId(): string {
-  return getOptionalEnvString("LOCAL_AUTH_USER_ID") ?? "local-user";
-}
-
 function canUseLocalGitHubForUser(userId?: string): boolean {
-  if (process.env.LOCAL_AUTH_ENABLED !== "true") {
-    return false;
-  }
-
   const localToken = getOptionalEnvString("LOCAL_GITHUB_ACCESS_TOKEN");
   if (!localToken) {
     return false;
@@ -44,7 +37,7 @@ function canUseLocalGitHubForUser(userId?: string): boolean {
     return true;
   }
 
-  return userId === getLocalAuthUserId();
+  return userId === LOCAL_WORKSPACE_USER_ID;
 }
 
 function buildFallbackAvatarUrl(githubId: number | undefined, login: string) {
@@ -53,17 +46,6 @@ function buildFallbackAvatarUrl(githubId: number | undefined, login: string) {
   }
 
   return `https://github.com/${login}.png`;
-}
-
-function parseOptionalGitHubId(
-  rawValue: string | undefined,
-): number | undefined {
-  if (!rawValue) {
-    return undefined;
-  }
-
-  const parsed = Number.parseInt(rawValue, 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
 }
 
 async function fetchLocalGitHubProfileFromApi(
@@ -132,22 +114,6 @@ export async function getLocalGitHubProfile(
   const token = getLocalGitHubAccessToken(userId);
   if (!token) {
     return null;
-  }
-
-  const envLogin = getOptionalEnvString("LOCAL_GITHUB_USERNAME");
-  const envAvatarUrl = getOptionalEnvString("LOCAL_GITHUB_AVATAR_URL");
-  const envName = getOptionalEnvString("LOCAL_GITHUB_NAME") ?? null;
-  const envGitHubId = parseOptionalGitHubId(
-    getOptionalEnvString("LOCAL_GITHUB_USER_ID"),
-  );
-
-  if (envLogin && envGitHubId) {
-    return {
-      githubId: envGitHubId,
-      login: envLogin,
-      avatarUrl: envAvatarUrl ?? buildFallbackAvatarUrl(envGitHubId, envLogin),
-      name: envName,
-    };
   }
 
   const now = Date.now();

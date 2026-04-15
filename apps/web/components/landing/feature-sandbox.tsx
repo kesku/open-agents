@@ -3,22 +3,21 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 const sequence = [
-  { state: "provisioning", ms: 1400 },
+  { state: "leasing", ms: 1400 },
   { state: "active", ms: 2400 },
-  { state: "hibernating", ms: 1200 },
-  { state: "hibernated", ms: 2000 },
-  { state: "restoring", ms: 1200 },
-  { state: "active", ms: 2400 },
+  { state: "busy", ms: 1600 },
+  { state: "resetting", ms: 1200 },
+  { state: "ready", ms: 1800 },
 ] as const;
 
 type State = (typeof sequence)[number]["state"];
 
 const descriptions: Record<State, string> = {
-  provisioning: "spinning up isolated environment",
-  active: "full filesystem, network, runtime access",
-  hibernating: "creating snapshot for instant restore",
-  hibernated: "zero compute \u00B7 snapshot saved",
-  restoring: "restoring from snapshot",
+  leasing: "assigning an isolated Proxmox LXC from the pool",
+  active: "workspace, editor, network, and runtime access ready",
+  busy: "agent is editing files and running commands",
+  resetting: "hard-resetting the node before release",
+  ready: "clean sandbox waiting for the next session",
 };
 
 export function FeatureSandbox() {
@@ -46,7 +45,7 @@ export function FeatureSandbox() {
       <div className="flex-1 px-5 py-4">
         <div className="flex items-center gap-3 font-mono text-[12px]">
           <span className="text-(--l-panel-fg-3)">sandbox</span>
-          <span className="text-(--l-panel-fg-2)">feat/auth</span>
+          <span className="text-(--l-panel-fg-2)">open-agents-2</span>
         </div>
 
         <div className="mt-6 flex gap-1">
@@ -77,21 +76,21 @@ export function FeatureSandbox() {
 
         <div className="mt-8 flex gap-8 font-mono text-[10px]">
           <div>
-            <div className="text-(--l-panel-fg-4)">branch</div>
-            <div className="mt-0.5 text-(--l-panel-fg-2)">feat/auth</div>
+            <div className="text-(--l-panel-fg-4)">node</div>
+            <div className="mt-0.5 text-(--l-panel-fg-2)">open-agents-2</div>
           </div>
           <div>
-            <div className="text-(--l-panel-fg-4)">snapshot</div>
+            <div className="text-(--l-panel-fg-4)">workspace</div>
             <div className="mt-0.5 text-(--l-panel-fg-2)">
-              {entry.state === "hibernated" || entry.state === "restoring"
-                ? "snap_a1b2c3"
-                : "\u2014"}
+              {entry.state === "ready" ? "\u2014" : "/workspace"}
             </div>
           </div>
           <div>
-            <div className="text-(--l-panel-fg-4)">cost</div>
+            <div className="text-(--l-panel-fg-4)">reset</div>
             <div className="mt-0.5 text-(--l-panel-fg-2)">
-              {entry.state === "hibernated" ? "$0.00" : "$0.02/m"}
+              {entry.state === "resetting" || entry.state === "ready"
+                ? "clean"
+                : "pending"}
             </div>
           </div>
         </div>

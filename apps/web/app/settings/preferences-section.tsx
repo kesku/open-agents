@@ -5,6 +5,7 @@ import { Plus, Search, Trash2, X } from "lucide-react";
 import { type ThemePreference, useTheme } from "@/app/providers";
 import {
   DEFAULT_SANDBOX_TYPE,
+  SANDBOX_OPTIONS,
   type SandboxType,
 } from "@/components/sandbox-selector-compact";
 import { Button } from "@/components/ui/button";
@@ -21,7 +22,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { ModelCombobox } from "@/components/model-combobox";
 import { useModelOptions } from "@/hooks/use-model-options";
-import { useSession } from "@/hooks/use-session";
 import {
   type DiffMode,
   useUserPreferences,
@@ -35,10 +35,6 @@ import {
   getDefaultModelOptionId,
   withMissingModelOption,
 } from "@/lib/model-options";
-
-const SANDBOX_OPTIONS: Array<{ id: SandboxType; name: string }> = [
-  { id: "vercel", name: "Vercel" },
-];
 
 const THEME_OPTIONS: Array<{ id: ThemePreference; name: string }> = [
   { id: "system", name: "System" },
@@ -113,7 +109,6 @@ export function PreferencesSectionSkeleton() {
 
 export function PreferencesSection() {
   const { theme, setTheme } = useTheme();
-  const { session } = useSession();
   const { preferences, loading, updatePreferences } = useUserPreferences();
   const { modelOptions, loading: modelOptionsLoading } = useModelOptions();
   const [isSaving, setIsSaving] = useState(false);
@@ -122,14 +117,10 @@ export function PreferencesSection() {
   const [globalSkillsError, setGlobalSkillsError] = useState<string | null>(
     null,
   );
-  const [copiedPublicProfile, setCopiedPublicProfile] = useState(false);
 
   const selectedDefaultModelId =
     preferences?.defaultModelId ?? getDefaultModelOptionId(modelOptions);
   const selectedSubagentModelId = preferences?.defaultSubagentModelId ?? "auto";
-  const publicProfilePath = session?.user?.username
-    ? `/u/${session.user.username}`
-    : null;
 
   const defaultModelOptions = useMemo(
     () => withMissingModelOption(modelOptions, selectedDefaultModelId),
@@ -234,36 +225,6 @@ export function PreferencesSection() {
       console.error("Failed to update alert sound preference:", error);
     } finally {
       setIsSaving(false);
-    }
-  };
-
-  const handlePublicUsageEnabledChange = async (enabled: boolean) => {
-    setIsSaving(true);
-    try {
-      await updatePreferences({ publicUsageEnabled: enabled });
-      if (!enabled) {
-        setCopiedPublicProfile(false);
-      }
-    } catch (error) {
-      console.error("Failed to update public usage preference:", error);
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const handleCopyPublicProfileUrl = async () => {
-    if (!publicProfilePath || typeof window === "undefined") {
-      return;
-    }
-
-    try {
-      await navigator.clipboard.writeText(
-        `${window.location.origin}${publicProfilePath}`,
-      );
-      setCopiedPublicProfile(true);
-      window.setTimeout(() => setCopiedPublicProfile(false), 1500);
-    } catch (error) {
-      console.error("Failed to copy public usage URL:", error);
     }
   };
 
@@ -509,48 +470,6 @@ export function PreferencesSection() {
                 />
               </div>
             )}
-            <div className="flex items-center justify-between gap-4">
-              <div className="space-y-0.5">
-                <Label htmlFor="public-usage-enabled">
-                  Public usage profile
-                </Label>
-                <p className="text-xs text-muted-foreground">
-                  Publish a shareable wrapped page at <code>/u/username</code>.
-                </p>
-              </div>
-              <Switch
-                id="public-usage-enabled"
-                checked={preferences?.publicUsageEnabled ?? false}
-                onCheckedChange={handlePublicUsageEnabledChange}
-                disabled={isSaving}
-              />
-            </div>
-            {(preferences?.publicUsageEnabled ?? false) &&
-              publicProfilePath && (
-                <div className="grid gap-2 pl-4">
-                  <Label htmlFor="public-usage-url">Public profile URL</Label>
-                  <div className="flex flex-col gap-2 sm:flex-row">
-                    <Input
-                      id="public-usage-url"
-                      readOnly
-                      value={publicProfilePath}
-                      className="font-mono text-xs sm:text-sm"
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={handleCopyPublicProfileUrl}
-                      disabled={isSaving}
-                    >
-                      {copiedPublicProfile ? "Copied" : "Copy URL"}
-                    </Button>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Share filtered snapshots with <code>?date=30d</code> or
-                    <code> ?date=2026-01-01..2026-01-31</code>.
-                  </p>
-                </div>
-              )}
           </div>
         </div>
       </div>
@@ -688,7 +607,7 @@ export function PreferencesSection() {
                   id="global-skill-source"
                   value={globalSkillSource}
                   onChange={(event) => setGlobalSkillSource(event.target.value)}
-                  placeholder="vercel/ai"
+                  placeholder="acme/agent-skills"
                   disabled={isSaving}
                 />
               </div>
@@ -718,7 +637,8 @@ export function PreferencesSection() {
             </div>
             <p className="text-xs text-muted-foreground">
               Enter the GitHub <code>owner/repo</code> source and the skill
-              name, e.g. <code>vercel/ai</code> + <code>ai-sdk</code>.
+              name, e.g. <code>acme/agent-skills</code> +{" "}
+              <code>debug-sandbox</code>.
             </p>
             {globalSkillsError && (
               <p className="text-xs text-destructive">{globalSkillsError}</p>

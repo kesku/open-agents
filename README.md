@@ -33,7 +33,7 @@ Current auth mode is local-only:
 
 - no Vercel OAuth
 - optional env-backed GitHub token auth
-- one fixed local user auto-signs in
+- one internal workspace identity
 
 ## Runtime Environment
 
@@ -48,8 +48,7 @@ Canonical env file on `open-agents-web`:
 This env script provides values for:
 
 - `POSTGRES_URL` and related DB config
-- local auth config
-- optional local GitHub config
+- optional server GitHub token
 - OpenAI provider config
 - optional Perplexity provider config
 - Proxmox pool configuration
@@ -99,21 +98,15 @@ Operational expectations:
 
 ## Local GitHub Mode
 
-For this single-user local deployment, GitHub support is intended to come from server env instead of the hosted GitHub App + OAuth flow.
+GitHub support comes from a single server token.
 
 ```bash
 export LOCAL_GITHUB_ACCESS_TOKEN=...
-export LOCAL_GITHUB_USER_ID=...
-export LOCAL_GITHUB_USERNAME=...
-export LOCAL_GITHUB_NAME=...
-export LOCAL_GITHUB_AVATAR_URL=...
 ```
 
 Notes:
 
-- `LOCAL_GITHUB_ACCESS_TOKEN` is the only required value.
-- `LOCAL_GITHUB_USER_ID`, `LOCAL_GITHUB_USERNAME`, and
-  `LOCAL_GITHUB_AVATAR_URL` are optional
+- `LOCAL_GITHUB_ACCESS_TOKEN` is required for local operator flow
 - Proxmox sandbox commands automatically receive the same token as
   `GH_TOKEN` and `GITHUB_TOKEN`
 - The agent can use `gh` directly inside a sandbox when it is installed

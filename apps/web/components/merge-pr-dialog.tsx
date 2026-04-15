@@ -34,6 +34,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { CheckRunsList } from "@/components/merge-check-runs";
 import { MergePrDialogActions } from "@/components/merge-pr-dialog-actions";
+import { createClientId } from "@/lib/client-id";
 import {
   MERGE_READINESS_POLL_INTERVAL_MS,
   shouldPollMergeReadiness,
@@ -230,7 +231,7 @@ export function MergePrDialog({
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Idempotency-Key": crypto.randomUUID(),
+          "Idempotency-Key": createClientId("merge"),
         },
         body: JSON.stringify({
           mergeMethod,

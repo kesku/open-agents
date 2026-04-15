@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import useSWR, { useSWRConfig } from "swr";
+import { createClientId } from "@/lib/client-id";
 import type { Chat } from "@/lib/db/schema";
 import { fetcherNoStore } from "@/lib/swr";
 
@@ -493,7 +494,7 @@ export function useSessionChats(
 
     const now = new Date();
     const optimisticChat: Chat = {
-      id: crypto.randomUUID(),
+      id: createClientId("chat"),
       sessionId,
       title: "New chat",
       modelId: data?.defaultModelId ?? null,

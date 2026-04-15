@@ -31,6 +31,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { type SessionGitStatus } from "@/hooks/use-session-git-status";
+import { createClientId } from "@/lib/client-id";
 import type { Session } from "@/lib/db/schema";
 import {
   commitAndPushSessionChanges,
@@ -249,7 +250,7 @@ export function CommitDialog({
     setIsSubmitting(true);
     setError(null);
 
-    const gitMessageId = crypto.randomUUID();
+    const gitMessageId = createClientId("git");
     const commitPartId = `${gitMessageId}:commit`;
 
     try {
