@@ -245,6 +245,7 @@ function makeOptions(overrides?: Record<string, unknown>) {
     chatId: "chat-1",
     sessionId: "session-1",
     userId: "user-1",
+    selectedModelId: "gpt-4",
     modelId: "gpt-4",
     agentOptions: {
       sandbox: { state: { type: "vercel" } },
@@ -299,6 +300,29 @@ describe("runAgentWorkflow", () => {
     expect(spies.persistAssistantMessage).toHaveBeenCalledTimes(1);
     const paCalls = spies.persistAssistantMessage.mock.calls as unknown[][];
     expect(paCalls[0][0]).toBe("chat-1");
+  });
+
+  test("persists selected and resolved model metadata on assistant messages", async () => {
+    await runAgentWorkflow(
+      makeOptions({
+        selectedModelId: "variant:builtin:gpt-5.4-xhigh",
+        modelId: "openai/gpt-5.4",
+      }),
+    );
+
+    const persistCalls = spies.persistAssistantMessage.mock
+      .calls as unknown[][];
+    const persistedMessage = persistCalls.at(-1)?.[1] as {
+      metadata?: {
+        selectedModelId?: string;
+        modelId?: string;
+      };
+    };
+
+    expect(persistedMessage.metadata).toMatchObject({
+      selectedModelId: "variant:builtin:gpt-5.4-xhigh",
+      modelId: "openai/gpt-5.4",
+    });
   });
 
   test("records usage after run", async () => {

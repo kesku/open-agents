@@ -311,6 +311,26 @@ describe("/api/chat route", () => {
     ]);
   });
 
+  test("passes both the selected model id and resolved model id to the workflow", async () => {
+    const { POST } = await routeModulePromise;
+    if (!chatRecord) {
+      throw new Error("chatRecord must be set");
+    }
+
+    chatRecord.modelId = "variant:builtin:gpt-5.4-xhigh";
+
+    const response = await POST(createValidRequest());
+
+    expect(response.ok).toBe(true);
+    expect(startCalls).toHaveLength(1);
+    expect(startCalls[0]?.[1]).toEqual([
+      expect.objectContaining({
+        selectedModelId: "variant:builtin:gpt-5.4-xhigh",
+        modelId: "openai/gpt-5.4",
+      }),
+    ]);
+  });
+
   test("serializes the GitHub token into agent sandbox context for tool reconnects", async () => {
     const { POST } = await routeModulePromise;
     githubTokenResult = "gh-token";

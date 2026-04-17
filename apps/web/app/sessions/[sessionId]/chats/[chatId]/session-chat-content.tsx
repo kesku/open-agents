@@ -67,6 +67,7 @@ import { useInlineQuestion } from "@/components/inline-question-input";
 import { SlashCommandDropdown } from "@/components/slash-command-dropdown";
 import { SnippetChip } from "@/components/snippet-chip";
 import { AssistantMessageGroups } from "@/components/assistant-message-groups";
+import { MessageModelPill } from "@/components/message-model-pill";
 import {
   PinnedTodoPanel,
   getLatestTodos,
@@ -3322,47 +3323,66 @@ export function SessionChatContent({
                                           >
                                             {p.text}
                                           </Streamdown>
-                                          {canCopyAssistantMessage && (
-                                            <div className="mt-1 flex items-center justify-start gap-1">
-                                              <button
-                                                type="button"
-                                                onClick={() =>
-                                                  void handleForkAssistantMessage(
-                                                    m.id,
-                                                  )
-                                                }
-                                                disabled={
-                                                  forkingAssistantMessageId !==
-                                                  null
-                                                }
-                                                aria-label="Fork conversation from this response"
-                                                className="rounded p-1 text-muted-foreground opacity-0 transition hover:text-foreground group-hover:opacity-100 focus-visible:opacity-100 disabled:cursor-not-allowed disabled:opacity-40"
-                                              >
-                                                {forkingAssistantMessageId ===
-                                                m.id ? (
-                                                  <Loader2 className="h-4 w-4 animate-spin" />
-                                                ) : (
-                                                  <GitBranch className="h-4 w-4" />
+                                          {(canCopyAssistantMessage ||
+                                            (!isMessageStreaming &&
+                                              isFinalAssistantTextPart &&
+                                              m.metadata)) && (
+                                            <div className="mt-1 flex items-center justify-start">
+                                              {canCopyAssistantMessage && (
+                                                <div className="flex items-center gap-1">
+                                                  <button
+                                                    type="button"
+                                                    onClick={() =>
+                                                      void handleForkAssistantMessage(
+                                                        m.id,
+                                                      )
+                                                    }
+                                                    disabled={
+                                                      forkingAssistantMessageId !==
+                                                      null
+                                                    }
+                                                    aria-label="Fork conversation from this response"
+                                                    className="rounded p-1 text-muted-foreground opacity-0 transition hover:text-foreground group-hover:opacity-100 focus-visible:opacity-100 disabled:cursor-not-allowed disabled:opacity-40"
+                                                  >
+                                                    {forkingAssistantMessageId ===
+                                                    m.id ? (
+                                                      <Loader2 className="h-4 w-4 animate-spin" />
+                                                    ) : (
+                                                      <GitBranch className="h-4 w-4" />
+                                                    )}
+                                                  </button>
+                                                  <button
+                                                    type="button"
+                                                    onClick={() =>
+                                                      void handleCopyAssistantMessage(
+                                                        m.id,
+                                                        p.text,
+                                                      )
+                                                    }
+                                                    aria-label="Copy assistant response"
+                                                    className="rounded p-1 text-muted-foreground opacity-0 transition hover:text-foreground group-hover:opacity-100 focus-visible:opacity-100"
+                                                  >
+                                                    {copiedAssistantMessageId ===
+                                                    m.id ? (
+                                                      <Check className="h-4 w-4" />
+                                                    ) : (
+                                                      <Copy className="h-4 w-4" />
+                                                    )}
+                                                  </button>
+                                                </div>
+                                              )}
+                                              {!isMessageStreaming &&
+                                                isFinalAssistantTextPart &&
+                                                m.metadata && (
+                                                  <span className="opacity-0 transition group-hover:opacity-100">
+                                                    <MessageModelPill
+                                                      metadata={m.metadata}
+                                                      modelOptions={
+                                                        modelOptions
+                                                      }
+                                                    />
+                                                  </span>
                                                 )}
-                                              </button>
-                                              <button
-                                                type="button"
-                                                onClick={() =>
-                                                  void handleCopyAssistantMessage(
-                                                    m.id,
-                                                    p.text,
-                                                  )
-                                                }
-                                                aria-label="Copy assistant response"
-                                                className="rounded p-1 text-muted-foreground opacity-0 transition hover:text-foreground group-hover:opacity-100 focus-visible:opacity-100"
-                                              >
-                                                {copiedAssistantMessageId ===
-                                                m.id ? (
-                                                  <Check className="h-4 w-4" />
-                                                ) : (
-                                                  <Copy className="h-4 w-4" />
-                                                )}
-                                              </button>
                                             </div>
                                           )}
                                         </div>
@@ -3973,7 +3993,7 @@ export function SessionChatContent({
                             >
                               <Paperclip className="h-4 w-4" />
                             </Button>
-                            {renderMessages.length === 0 && chatInfo.modelId ? (
+                            {chatInfo.modelId && (
                               <div
                                 className={
                                   isChatInFlight ||
@@ -4014,13 +4034,6 @@ export function SessionChatContent({
                                   }}
                                 />
                               </div>
-                            ) : (
-                              chatInfo.modelId && (
-                                <span className="text-xs text-muted-foreground/60">
-                                  {selectedModelOption?.label ??
-                                    chatInfo.modelId}
-                                </span>
-                              )
                             )}
                             <ContextUsageIndicator
                               inputTokens={tokenUsage.inputTokens}
