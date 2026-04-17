@@ -3,21 +3,22 @@ import type { SandboxState, Sandbox } from "@open-harness/sandbox";
 import type { WebAgentUIMessage } from "@/app/types";
 import type { AutoCommitResult } from "@/lib/chat/auto-commit-direct";
 import type { AutoCreatePrResult } from "@/lib/chat/auto-pr-direct";
+import { dedupeMessageReasoning } from "@/lib/chat/dedupe-message-reasoning";
+import { getChatTitlePreview } from "@/lib/chat-title";
 import {
   compareAndSetChatActiveStreamId,
   createChatMessageIfNotExists,
+  isFirstChatMessage,
   touchChat,
   updateChat,
-  updateSession,
-  isFirstChatMessage,
-  upsertChatMessageScoped,
   updateChatAssistantActivity,
+  updateSession,
+  upsertChatMessageScoped,
 } from "@/lib/db/sessions";
 import {
   buildActiveLifecycleUpdate,
   buildLifecycleActivityUpdate,
 } from "@/lib/sandbox/lifecycle";
-import { dedupeMessageReasoning } from "@/lib/chat/dedupe-message-reasoning";
 import {
   recordWorkflowRun,
   type WorkflowRunStatus,
@@ -123,9 +124,7 @@ export async function persistUserMessage(
       return;
     }
 
-    const title =
-      textContent.length > 30 ? `${textContent.slice(0, 30)}...` : textContent;
-    await updateChat(chatId, { title });
+    await updateChat(chatId, { title: getChatTitlePreview(textContent) });
   } catch (error) {
     console.error("[workflow] Failed to persist user message:", error);
   }

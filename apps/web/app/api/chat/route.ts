@@ -1,6 +1,9 @@
 import { createUIMessageStreamResponse, type InferUIMessageChunk } from "ai";
 import { start } from "workflow/api";
 import type { WebAgentUIMessage } from "@/app/types";
+import { assistantFileLinkPrompt } from "@/lib/assistant-file-links";
+import { createCancelableReadableStream } from "@/lib/chat/create-cancelable-readable-stream";
+import { getChatTitlePreview } from "@/lib/chat-title";
 import {
   compareAndSetChatActiveStreamId,
   createChatMessageIfNotExists,
@@ -12,8 +15,6 @@ import {
 } from "@/lib/db/sessions";
 import { getUserPreferences } from "@/lib/db/user-preferences";
 import { getAllVariants } from "@/lib/model-variants";
-import { createCancelableReadableStream } from "@/lib/chat/create-cancelable-readable-stream";
-import { assistantFileLinkPrompt } from "@/lib/assistant-file-links";
 import { buildActiveLifecycleUpdate } from "@/lib/sandbox/lifecycle";
 import {
   requireAuthenticatedUser,
@@ -318,11 +319,7 @@ async function persistLatestUserMessage(
       .trim();
 
     if (textContent.length > 0) {
-      const title =
-        textContent.length > 30
-          ? `${textContent.slice(0, 30)}...`
-          : textContent;
-      await updateChat(chatId, { title });
+      await updateChat(chatId, { title: getChatTitlePreview(textContent) });
     }
   } catch (error) {
     console.error("Failed to persist user message:", error);

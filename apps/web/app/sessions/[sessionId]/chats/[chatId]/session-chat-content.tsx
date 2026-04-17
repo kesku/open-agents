@@ -58,6 +58,7 @@ import {
   AssistantFileLink,
   type AssistantFileLinkProps,
 } from "@/components/assistant-file-link";
+import { getChatTitlePreview } from "@/lib/chat-title";
 import { FileSuggestionsDropdown } from "@/components/file-suggestions-dropdown";
 import { ImageAttachmentsPreview } from "@/components/image-attachments-preview";
 import { TextAttachmentsPreview } from "@/components/text-attachments-preview";
@@ -3738,10 +3739,7 @@ export function SessionChatContent({
                             shouldSetOptimisticTitle &&
                             trimmedText.length > 0
                           ) {
-                            const nextTitle =
-                              trimmedText.length > 30
-                                ? `${trimmedText.slice(0, 30)}...`
-                                : trimmedText;
+                            const nextTitle = getChatTitlePreview(trimmedText);
                             pendingOptimisticTitleChatIdRef.current =
                               chatInfo.id;
                             void setChatTitle(chatInfo.id, nextTitle);
