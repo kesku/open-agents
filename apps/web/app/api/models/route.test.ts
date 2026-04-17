@@ -193,4 +193,101 @@ describe("/api/models context window enrichment", () => {
     expect(contextById.get("openai/gpt-5.4")).toBeUndefined();
     expect(contextById.get("openai/gpt-5.2")).toBe(272_000);
   });
+
+  test("keeps valid models.dev metadata when sibling fields are invalid", async () => {
+    openAiModelsApiData = {
+      data: [{ id: "gpt-5.4" }, { id: "gpt-5-mini" }],
+    };
+    modelsDevApiData = {
+      invalidProvider: "bad",
+      openai: {
+        models: {
+          "gpt-5.4": {
+            limit: { context: "400_000" },
+            cost: {
+              input: 1.25,
+              output: 10,
+              context_over_200k: {
+                input: 2.5,
+              },
+            },
+          },
+          broken: {
+            limit: { context: "not-a-number" },
+            cost: { input: "expensive" },
+          },
+        },
+      },
+    };
+
+    const { clearAvailableLanguageModelsCacheForTests } =
+      await modelsWithContextModulePromise;
+    clearAvailableLanguageModelsCacheForTests();
+
+    const { GET } = await routeModulePromise;
+    const response = await GET();
+
+    expect(response.ok).toBe(true);
+
+    const body = (await response.json()) as {
+      models: Array<{
+        id: string;
+        context_window?: number;
+        cost?: {
+          input?: number;
+          output?: number;
+          context_over_200k?: {
+            input?: number;
+          };
+        };
+      }>;
+    };
+
+    const model = body.models.find((entry) => entry.id === "openai/gpt-5.4");
+    expect(model).toMatchObject({
+      id: "openai/gpt-5.4",
+      cost: {
+        input: 1.25,
+        output: 10,
+        context_over_200k: {
+          input: 2.5,
+        },
+      },
+    });
+    expect(model?.context_window).toBeUndefined();
+  });
+
+  test("applies openai metadata to perplexity-routed models", async () => {
+    openAiModelsApiData = {
+      data: [{ id: "gpt-5.4" }],
+    };
+    process.env.PERPLEXITY_API_KEY = "test-perplexity-key";
+    modelsDevApiData = {
+      openai: {
+        models: {
+          "gpt-5.4": {
+            limit: { context: 400_000 },
+          },
+        },
+      },
+    };
+
+    const { clearAvailableLanguageModelsCacheForTests } =
+      await modelsWithContextModulePromise;
+    clearAvailableLanguageModelsCacheForTests();
+
+    const { GET } = await routeModulePromise;
+    const response = await GET();
+
+    expect(response.ok).toBe(true);
+
+    const body = (await response.json()) as {
+      models: Array<{ id: string; context_window?: number }>;
+    };
+
+    const model = body.models.find(
+      (entry) => entry.id === "perplexity/openai/gpt-5.4",
+    );
+    expect(model?.context_window).toBe(400_000);
+  });
 });
