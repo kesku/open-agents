@@ -420,43 +420,42 @@ describe("tools execute behavior", () => {
     expect(allowedBuildCommand).toBe(false);
   });
 
-  const originalFetch = globalThis.fetch;
   afterEach(() => {
-    globalThis.fetch = originalFetch;
     sandboxRegistry.clear();
   });
 
-  test("webFetchTool truncates oversized response bodies", async () => {
-    globalThis.fetch = ((..._args: Parameters<typeof fetch>) =>
-      Promise.resolve(
-        new Response("x".repeat(20_050), {
-          status: 200,
-          statusText: "OK",
-          headers: { "x-test": "1" },
-        }),
-      )) as unknown as typeof fetch;
+  test("webFetchTool truncates oversized response bodies via sandbox", async () => {
+    const oversizedBody = "x".repeat(5_050);
+    const curlOutput = `${oversizedBody}\n200`;
+    const sandbox = {
+      workingDirectory: "/repo",
+      exec: async () => ({
+        success: true,
+        exitCode: 0,
+        stdout: curlOutput,
+        stderr: "",
+      }),
+    };
 
     const result = await webFetchTool.execute?.(
       {
         url: "https://example.com",
         method: "GET",
       },
-      executionOptions(),
+      executionOptions(createContext(sandbox)),
     );
 
     expect(result).toMatchObject({
       success: true,
       status: 200,
-      statusText: "OK",
       truncated: true,
-      headers: { "x-test": "1" },
     });
 
     const body =
       result && typeof result === "object" && "body" in result
         ? (result.body as string)
         : "";
-    expect(body.length).toBe(20_000);
+    expect(body.length).toBe(5_000);
   });
 
   test("askUserQuestionTool formats structured answers", () => {
