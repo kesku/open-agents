@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import {
   commitAndPushSessionChanges,
   createSessionBranch,
+  discardSessionUncommittedChanges,
   fetchRepoBranches,
   generatePullRequestContent,
   requestGeneratePr,
@@ -261,5 +262,59 @@ describe("git-flow-client", () => {
     expect(body.commitOnly).toBeUndefined();
     expect(body.createBranchOnly).toBeUndefined();
     expect(result.title).toBe("feat: improve flow");
+  });
+
+  test("discardSessionUncommittedChanges posts to the discard route", async () => {
+    globalThis.fetch = mock((input: RequestInfo | URL, init?: RequestInit) => {
+      fetchCalls.push({ input, init });
+      return Promise.resolve(
+        createMockResponse({
+          ok: true,
+          json: async () => ({
+            discarded: true,
+            hasUncommittedChanges: false,
+          }),
+        }),
+      );
+    }) as unknown as typeof fetch;
+
+    const result = await discardSessionUncommittedChanges({
+      sessionId: "session-1",
+      filePath: "src/app.ts",
+      oldPath: "src/old.ts",
+    });
+
+    expect(String(fetchCalls[0]?.input)).toBe(
+      "/api/sessions/session-1/discard-uncommitted",
+    );
+    expect(fetchCalls[0]?.init?.method).toBe("POST");
+    expect(fetchCalls[0]?.init?.body).toBe(
+      JSON.stringify({
+        filePath: "src/app.ts",
+        oldPath: "src/old.ts",
+      }),
+    );
+    expect(result).toEqual({
+      discarded: true,
+      hasUncommittedChanges: false,
+    });
+  });
+
+  test("discardSessionUncommittedChanges surfaces API errors", async () => {
+    globalThis.fetch = mock(() =>
+      Promise.resolve(
+        createMockResponse({
+          ok: false,
+          status: 409,
+          json: async () => ({ error: "Wait for the active agent run" }),
+        }),
+      ),
+    ) as unknown as typeof fetch;
+
+    await expect(
+      discardSessionUncommittedChanges({
+        sessionId: "session-1",
+      }),
+    ).rejects.toThrow("Wait for the active agent run");
   });
 });

@@ -32,6 +32,12 @@ export interface GeneratePrResult {
   error?: string;
 }
 
+interface DiscardUncommittedChangesRequest {
+  sessionId: string;
+  filePath?: string;
+  oldPath?: string;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
@@ -162,4 +168,37 @@ export async function generatePullRequestContent(params: {
   branchName: string;
 }): Promise<GeneratePrResult> {
   return requestGeneratePr(params);
+}
+
+export async function discardSessionUncommittedChanges(
+  params: DiscardUncommittedChangesRequest,
+): Promise<{ discarded: boolean; hasUncommittedChanges: boolean }> {
+  const response = await fetch(
+    `/api/sessions/${params.sessionId}/discard-uncommitted`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ...(params.filePath ? { filePath: params.filePath } : {}),
+        ...(params.oldPath ? { oldPath: params.oldPath } : {}),
+      }),
+    },
+  );
+
+  const data: unknown = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    if (isRecord(data) && typeof data.error === "string") {
+      throw new Error(data.error);
+    }
+    throw new Error("Failed to discard uncommitted changes");
+  }
+
+  if (!isRecord(data)) {
+    throw new Error("Invalid discard response");
+  }
+
+  return {
+    discarded: readBoolean(data.discarded) ?? false,
+    hasUncommittedChanges: readBoolean(data.hasUncommittedChanges) ?? false,
+  };
 }
