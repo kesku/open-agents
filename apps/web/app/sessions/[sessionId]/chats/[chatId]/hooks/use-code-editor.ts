@@ -6,6 +6,7 @@ import type {
   CodeEditorLaunchResponse,
   CodeEditorStatusResponse,
 } from "@/app/api/sessions/[sessionId]/code-editor/route";
+import { normalizeClientExternalUrl } from "@/lib/client-external-url";
 
 export type CodeEditorState =
   | { status: "idle" }
@@ -22,6 +23,19 @@ export interface CodeEditorControls {
   handleOpen: () => Promise<void>;
   handleOpenFile: (filePath: string) => Promise<void>;
   handleStop: () => Promise<void>;
+}
+
+function shouldOpenEditorExternally(url: string): boolean {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  try {
+    const parsed = new URL(url);
+    return window.location.protocol === "https:" && parsed.protocol === "http:";
+  } catch {
+    return false;
+  }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -42,15 +56,13 @@ function parseLaunchResponse(body: unknown): CodeEditorLaunchResponse | null {
   }
 
   const { url, port } = body;
-  if (
-    typeof url !== "string" ||
-    typeof port !== "number" ||
-    !Number.isFinite(port)
-  ) {
+  const normalizedUrl =
+    typeof url === "string" ? normalizeClientExternalUrl(url) : null;
+  if (typeof port !== "number" || !Number.isFinite(port) || !normalizedUrl) {
     return null;
   }
 
-  return { url, port };
+  return { url: normalizedUrl, port };
 }
 
 export function useCodeEditor({
@@ -95,10 +107,14 @@ export function useCodeEditor({
           return;
         }
 
-        if (body.running && body.url) {
+        const normalizedUrl =
+          typeof body.url === "string"
+            ? normalizeClientExternalUrl(body.url)
+            : null;
+        if (body.running && normalizedUrl) {
           setState({
             status: "ready",
-            info: { url: body.url, port: body.port },
+            info: { url: normalizedUrl, port: body.port },
           });
         }
       } catch {
@@ -116,6 +132,10 @@ export function useCodeEditor({
   const openEditorPage = useCallback(() => {
     router.push(`/codespace/${sessionId}`);
   }, [router, sessionId]);
+
+  const openEditorUrl = useCallback((url: string) => {
+    window.open(url, "_blank", "noopener,noreferrer");
+  }, []);
 
   /**
    * Ensure code-server is running and return the launch response.
@@ -172,20 +192,30 @@ export function useCodeEditor({
   const handleOpen = useCallback(async () => {
     const info = await ensureRunning();
     if (info) {
+      if (shouldOpenEditorExternally(info.url)) {
+        openEditorUrl(info.url);
+        return;
+      }
+
       openEditorPage();
     }
-  }, [ensureRunning, openEditorPage]);
+  }, [ensureRunning, openEditorPage, openEditorUrl]);
 
   const handleOpenFile = useCallback(
     async (_filePath: string) => {
       const info = await ensureRunning();
       if (info) {
+        if (shouldOpenEditorExternally(info.url)) {
+          openEditorUrl(info.url);
+          return;
+        }
+
         // Open the codespace page; file-specific deep linking can be added
         // to the codespace route later via query parameters.
         openEditorPage();
       }
     },
-    [ensureRunning, openEditorPage],
+    [ensureRunning, openEditorPage, openEditorUrl],
   );
 
   const handleStop = useCallback(async () => {

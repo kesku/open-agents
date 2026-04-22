@@ -16,6 +16,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import type { CodeEditorStatusResponse } from "@/app/api/sessions/[sessionId]/code-editor/route";
+import { normalizeClientExternalUrl } from "@/lib/client-external-url";
 import { useCodespaceContext } from "./codespace-context";
 
 type EditorState =
@@ -36,6 +37,21 @@ function getErrorMessage(body: unknown, fallback: string): string {
   return body.error;
 }
 
+function shouldEmbedEditorUrl(url: string): boolean {
+  if (typeof window === "undefined") {
+    return true;
+  }
+
+  try {
+    const parsed = new URL(url);
+    return !(
+      window.location.protocol === "https:" && parsed.protocol === "http:"
+    );
+  } catch {
+    return false;
+  }
+}
+
 export default function CodespacePage() {
   const router = useRouter();
   const { sessionId } = useParams<{ sessionId: string }>();
@@ -52,10 +68,17 @@ export default function CodespacePage() {
       const statusRes = await fetch(`/api/sessions/${sessionId}/code-editor`);
       if (statusRes.ok) {
         const statusBody = (await statusRes.json()) as CodeEditorStatusResponse;
+        const normalizedUrl =
+          typeof statusBody.url === "string"
+            ? normalizeClientExternalUrl(statusBody.url)
+            : null;
         if (statusBody.running && statusBody.url) {
+          if (!normalizedUrl) {
+            throw new Error("Invalid code editor URL");
+          }
           setState({
             status: "ready",
-            url: statusBody.url,
+            url: normalizedUrl,
             port: statusBody.port,
           });
           return;
@@ -75,9 +98,14 @@ export default function CodespacePage() {
         );
       }
 
+      const normalizedUrl =
+        isRecord(launchBody) && typeof launchBody.url === "string"
+          ? normalizeClientExternalUrl(launchBody.url)
+          : null;
+
       if (
         !isRecord(launchBody) ||
-        typeof launchBody.url !== "string" ||
+        !normalizedUrl ||
         typeof launchBody.port !== "number"
       ) {
         throw new Error("Invalid code editor response");
@@ -85,7 +113,7 @@ export default function CodespacePage() {
 
       setState({
         status: "ready",
-        url: launchBody.url as string,
+        url: normalizedUrl,
         port: launchBody.port as number,
       });
     } catch (error) {
@@ -247,18 +275,37 @@ export default function CodespacePage() {
           </div>
         )}
 
+        {(state.status === "ready" || state.status === "stopping") &&
+          !shouldEmbedEditorUrl(state.url) && (
+            <div className="flex h-full flex-col items-center justify-center gap-3 bg-background text-muted-foreground">
+              <p className="max-w-md text-center text-sm">
+                The local editor is currently exposed over HTTP, so it cannot be
+                embedded inside the secure app shell.
+              </p>
+              <Button
+                onClick={() =>
+                  window.open(state.url, "_blank", "noopener,noreferrer")
+                }
+              >
+                <ExternalLink className="mr-1.5 h-4 w-4" />
+                Open Editor
+              </Button>
+            </div>
+          )}
+
         {/* oxlint-disable react/iframe-missing-sandbox -- code-server requires both allow-scripts and allow-same-origin; cross-origin so the combination is safe */}
-        {(state.status === "ready" || state.status === "stopping") && (
-          <iframe
-            ref={iframeRef}
-            src={state.url}
-            title="Code Editor"
-            className="h-full w-full border-0"
-            sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-modals"
-            allow="clipboard-read; clipboard-write"
-            onLoad={() => setIframeLoaded(true)}
-          />
-        )}
+        {(state.status === "ready" || state.status === "stopping") &&
+          shouldEmbedEditorUrl(state.url) && (
+            <iframe
+              ref={iframeRef}
+              src={state.url}
+              title="Code Editor"
+              className="h-full w-full border-0"
+              sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-modals"
+              allow="clipboard-read; clipboard-write"
+              onLoad={() => setIframeLoaded(true)}
+            />
+          )}
         {/* oxlint-enable react/iframe-missing-sandbox */}
 
         {/* Loading overlay */}

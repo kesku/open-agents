@@ -615,22 +615,40 @@ function getFrameworkArgs(framework: DevFramework, port: number): string[] {
   }
 }
 
+function isViteFamilyFramework(framework: DevFramework): boolean {
+  return framework === "vite" || framework === "astro" || framework === "nuxt";
+}
+
 function buildRunCommand(
   packageManager: PackageManager,
   framework: DevFramework,
   port: number,
+  allowedHost: string | null,
 ): string {
+  const envPairs: Array<readonly [string, string]> = [
+    ["BROWSER", "none"],
+    ["HOST", "0.0.0.0"],
+    ["PORT", String(port)],
+  ];
+
+  if (allowedHost && isViteFamilyFramework(framework)) {
+    envPairs.push(["__VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS", allowedHost]);
+  }
+
+  const envPrefix = `env ${envPairs
+    .map(([key, value]) => `${key}=${shellQuote(value)}`)
+    .join(" ")}`;
   const extraArgs = getFrameworkArgs(framework, port).join(" ");
 
   switch (packageManager) {
     case "bun":
-      return `env BROWSER=none HOST=0.0.0.0 PORT=${port} bun run dev${extraArgs ? ` -- ${extraArgs}` : ""}`;
+      return `${envPrefix} bun run dev${extraArgs ? ` -- ${extraArgs}` : ""}`;
     case "pnpm":
-      return `env BROWSER=none HOST=0.0.0.0 PORT=${port} pnpm dev${extraArgs ? ` -- ${extraArgs}` : ""}`;
+      return `${envPrefix} pnpm dev${extraArgs ? ` -- ${extraArgs}` : ""}`;
     case "yarn":
-      return `env BROWSER=none HOST=0.0.0.0 PORT=${port} yarn dev${extraArgs ? ` ${extraArgs}` : ""}`;
+      return `${envPrefix} yarn dev${extraArgs ? ` ${extraArgs}` : ""}`;
     case "npm":
-      return `env BROWSER=none HOST=0.0.0.0 PORT=${port} npm run dev${extraArgs ? ` -- ${extraArgs}` : ""}`;
+      return `${envPrefix} npm run dev${extraArgs ? ` -- ${extraArgs}` : ""}`;
   }
 }
 
@@ -645,6 +663,7 @@ function buildLaunchCommand(params: {
   packageManager: PackageManager;
   framework: DevFramework;
   port: number;
+  allowedHost: string | null;
   installRootAbs: string;
   packageDirAbs: string;
   installDependencies: boolean;
@@ -654,6 +673,7 @@ function buildLaunchCommand(params: {
     params.packageManager,
     params.framework,
     params.port,
+    params.allowedHost,
   );
   const commandSteps = [`printf '%s' "$$" > ${shellQuote(params.pidFilePath)}`];
 
@@ -688,6 +708,21 @@ function buildDevServerResponse(
     port: target.port,
     url: sandbox.domain(target.port),
   };
+}
+
+function getSandboxHostName(
+  sandbox: ConnectedSandbox,
+  port: number,
+): string | null {
+  if (!sandbox.domain) {
+    return null;
+  }
+
+  try {
+    return new URL(sandbox.domain(port)).hostname;
+  } catch {
+    return null;
+  }
 }
 
 async function clearPersistedDevServerTarget(
@@ -968,6 +1003,7 @@ export async function POST(_req: Request, context: RouteContext) {
       packageManager,
       framework: candidate.framework,
       port,
+      allowedHost: getSandboxHostName(sandbox, port),
       installRootAbs,
       packageDirAbs,
       installDependencies,

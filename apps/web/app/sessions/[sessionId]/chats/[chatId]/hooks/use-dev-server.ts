@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { DevServerLaunchResponse } from "@/app/api/sessions/[sessionId]/dev-server/route";
+import { normalizeClientExternalUrl } from "@/lib/client-external-url";
 
 export type DevServerLaunchState =
   | { status: "idle" }
@@ -37,11 +38,13 @@ function parseLaunchResponse(body: unknown): DevServerLaunchResponse | null {
   }
 
   const { packagePath, port, url } = body;
+  const normalizedUrl =
+    typeof url === "string" ? normalizeClientExternalUrl(url) : null;
   if (
     typeof packagePath !== "string" ||
     typeof port !== "number" ||
     !Number.isFinite(port) ||
-    typeof url !== "string"
+    !normalizedUrl
   ) {
     return null;
   }
@@ -49,7 +52,7 @@ function parseLaunchResponse(body: unknown): DevServerLaunchResponse | null {
   return {
     packagePath,
     port,
-    url,
+    url: normalizedUrl,
   };
 }
 
@@ -73,7 +76,11 @@ export function useDevServer({
   }, [canRun]);
 
   const openDevServerUrl = useCallback((url: string) => {
-    window.open(url, "_blank", "noopener,noreferrer");
+    const normalizedUrl = normalizeClientExternalUrl(url);
+    if (!normalizedUrl) {
+      throw new Error("Invalid dev server URL");
+    }
+    window.open(normalizedUrl, "_blank", "noopener,noreferrer");
   }, []);
 
   const handlePrimaryAction = useCallback(async () => {

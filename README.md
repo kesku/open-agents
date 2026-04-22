@@ -36,14 +36,14 @@ docker compose --env-file /etc/open-agents/platform.env up -d --build
 The main app is routed through Traefik at:
 
 ```text
-http://openagents.local/sessions
+https://openagents.kesku.me/sessions
 ```
 
 Sandbox editor and preview URLs are derived from a stable opaque session slug:
 
 ```text
-http://oa-<slug>-3000.<SANDBOX_DOMAIN_SUFFIX>
-http://oa-<slug>-5173.<SANDBOX_DOMAIN_SUFFIX>
+https://oa-<slug>-3000.kesku.me
+https://oa-<slug>-5173.kesku.me
 ```
 
 ## Deploying From This Repo
@@ -81,6 +81,13 @@ That token is used for:
 - clone and push auth
 - pull request creation
 - `gh` inside sandbox containers via `GH_TOKEN` and `GITHUB_TOKEN`
+
+## Domain Notes
+
+- Keep the main app at `openagents.kesku.me` behind Cloudflare Access.
+- Use sandbox/editor/dev hosts under `*.kesku.me`, not `*.openagents.kesku.me`.
+- This wildcard move matters because Cloudflare's default TLS coverage works for first-level wildcard hosts like `*.kesku.me`, but not for deeper wildcard hosts like `*.openagents.kesku.me`.
+- Exact tunnel routes for other services still take precedence over the wildcard sandbox route.
 
 ## Operations
 

@@ -285,6 +285,47 @@ describe("/api/sessions/[sessionId]/dev-server", () => {
     expect(lastLaunchCommand).toContain("bun install");
     expect(lastLaunchCommand).toContain("bun run dev");
     expect(lastLaunchCommand).toContain("--hostname 0.0.0.0 --port 3000");
+    expect(lastLaunchCommand).not.toContain(
+      "__VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS",
+    );
+  });
+
+  test("adds explicit allowed hosts for vite-family dev servers", async () => {
+    const { POST } = await routeModulePromise;
+
+    currentFindOutput = "./package.json\n./apps/site/package.json\n";
+    setMockDirectory("/vercel/sandbox/apps/site");
+    setMockFile(
+      "/vercel/sandbox/apps/site/package.json",
+      JSON.stringify({
+        scripts: {
+          dev: "vite",
+        },
+        dependencies: {
+          vite: "6.0.0",
+        },
+      }),
+    );
+
+    const response = await POST(
+      new Request("http://localhost/api/sessions/session-1/dev-server", {
+        method: "POST",
+      }),
+      createRouteContext(),
+    );
+
+    expect(response.status).toBe(200);
+    expect(lastLaunchCommand).not.toBeNull();
+
+    if (!lastLaunchCommand) {
+      throw new Error("Expected execDetached to receive a launch command");
+    }
+
+    expect(lastLaunchCommand).toContain("bun run dev");
+    expect(lastLaunchCommand).toContain("--host 0.0.0.0 --port 5173");
+    expect(lastLaunchCommand).toContain(
+      "__VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS='sb-5173.vercel.run'",
+    );
   });
 
   test("returns the existing preview URL without relaunching when the dev server is already running", async () => {
