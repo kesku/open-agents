@@ -20,6 +20,16 @@ export {
   type SandboxConnectConfig,
 } from "./factory";
 
+// docker
+export {
+  DockerClient,
+  connectDockerContainer,
+  DockerContainerSandbox,
+  type DockerContainerState,
+  type DockerRecoverableWorkspaceState,
+  type DockerInspectContainer,
+} from "./docker";
+
 // proxmox
 export {
   connectProxmoxLxc,

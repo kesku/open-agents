@@ -24,7 +24,7 @@ interface CreateSessionRequest {
   branch?: string;
   cloneUrl?: string;
   isNewBranch?: boolean;
-  sandboxType?: "vercel" | "proxmox-lxc";
+  sandboxType?: "vercel" | "proxmox-lxc" | "docker-container";
   autoCommitPush?: boolean;
   autoCreatePr?: boolean;
 }

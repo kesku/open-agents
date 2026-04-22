@@ -36,7 +36,8 @@ export const CODE_SERVER_PORT = 8000;
 
 /** Default working directory for sandboxes, used for path display */
 export const DEFAULT_WORKING_DIRECTORY =
-  getConfiguredSandboxBackend() === "proxmox-lxc"
+  getConfiguredSandboxBackend() === "proxmox-lxc" ||
+  getConfiguredSandboxBackend() === "docker-container"
     ? "/workspace"
     : "/vercel/sandbox";
 

@@ -32,6 +32,34 @@ function getProxmoxLeaseId(state: unknown): string | null {
   return hasNonEmptyString(leaseId) ? leaseId : null;
 }
 
+function getDockerContainerName(state: unknown): string | null {
+  if (!state || typeof state !== "object") {
+    return null;
+  }
+
+  const containerName = (state as { containerName?: unknown }).containerName;
+  return hasNonEmptyString(containerName) ? containerName : null;
+}
+
+function hasDockerRuntimeHandle(state: unknown): boolean {
+  if (!state || typeof state !== "object") {
+    return false;
+  }
+
+  const containerName = getDockerContainerName(state);
+  const workspaceHostPath = (state as { workspaceHostPath?: unknown })
+    .workspaceHostPath;
+  const routeSlug = (state as { routeSlug?: unknown }).routeSlug;
+  const domainSuffix = (state as { domainSuffix?: unknown }).domainSuffix;
+
+  return (
+    containerName !== null &&
+    hasNonEmptyString(workspaceHostPath) &&
+    hasNonEmptyString(routeSlug) &&
+    hasNonEmptyString(domainSuffix)
+  );
+}
+
 function hasProxmoxRuntimeHandle(state: unknown): boolean {
   if (!state || typeof state !== "object") {
     return false;
@@ -58,7 +86,11 @@ function getSandboxType(state: unknown): SandboxState["type"] | null {
   }
 
   const type = (state as { type?: unknown }).type;
-  return type === "proxmox-lxc" || type === "vercel" ? type : null;
+  return type === "proxmox-lxc" ||
+    type === "vercel" ||
+    type === "docker-container"
+    ? type
+    : null;
 }
 
 export function getSessionSandboxName(sessionId: string): string {
@@ -140,6 +172,10 @@ export function hasRuntimeSandboxState(state: unknown): boolean {
     return hasProxmoxRuntimeHandle(state);
   }
 
+  if (sandboxType === "docker-container") {
+    return hasDockerRuntimeHandle(state);
+  }
+
   return hasResumableSandboxState(state);
 }
 
@@ -166,7 +202,10 @@ export function isSandboxUnavailableError(message: string): boolean {
     normalized.includes("status code 404") ||
     normalized.includes("sandbox is stopped") ||
     normalized.includes("sandbox not found") ||
-    normalized.includes("sandbox probe failed")
+    normalized.includes("sandbox probe failed") ||
+    normalized.includes("docker sandbox container") ||
+    normalized.includes("no such container") ||
+    normalized.includes("no such object")
   );
 }
 
@@ -178,7 +217,9 @@ function hasRuntimeState(state: SandboxState): boolean {
 
   return state.type === "proxmox-lxc"
     ? hasProxmoxRuntimeHandle(state)
-    : hasResumableSandboxState(state);
+    : state.type === "docker-container"
+      ? hasDockerRuntimeHandle(state)
+      : hasResumableSandboxState(state);
 }
 
 /**
@@ -193,6 +234,27 @@ export function clearSandboxState(
     return {
       type: state.type,
       ...(state.source ? { source: state.source } : {}),
+    } as SandboxState;
+  }
+
+  if (state.type === "docker-container") {
+    return {
+      type: state.type,
+      ...(state.source ? { source: state.source } : {}),
+      ...(state.image ? { image: state.image } : {}),
+      ...(state.network ? { network: state.network } : {}),
+      ...(state.workingDirectory
+        ? { workingDirectory: state.workingDirectory }
+        : {}),
+      ...(state.workspaceHostPath
+        ? { workspaceHostPath: state.workspaceHostPath }
+        : {}),
+      ...(state.routeSlug ? { routeSlug: state.routeSlug } : {}),
+      ...(state.domainSuffix ? { domainSuffix: state.domainSuffix } : {}),
+      ...(state.publicProtocol ? { publicProtocol: state.publicProtocol } : {}),
+      ...(state.recoverableWorkspace
+        ? { recoverableWorkspace: state.recoverableWorkspace }
+        : {}),
     } as SandboxState;
   }
 
@@ -218,6 +280,30 @@ export function clearSandboxResumeState(
     type: state.type,
     ...(state.type === "proxmox-lxc" && state.source
       ? { source: state.source }
+      : {}),
+    ...(state.type === "docker-container" && state.source
+      ? { source: state.source }
+      : {}),
+    ...(state.type === "docker-container" && state.image
+      ? { image: state.image }
+      : {}),
+    ...(state.type === "docker-container" && state.network
+      ? { network: state.network }
+      : {}),
+    ...(state.type === "docker-container" && state.workingDirectory
+      ? { workingDirectory: state.workingDirectory }
+      : {}),
+    ...(state.type === "docker-container" && state.workspaceHostPath
+      ? { workspaceHostPath: state.workspaceHostPath }
+      : {}),
+    ...(state.type === "docker-container" && state.routeSlug
+      ? { routeSlug: state.routeSlug }
+      : {}),
+    ...(state.type === "docker-container" && state.domainSuffix
+      ? { domainSuffix: state.domainSuffix }
+      : {}),
+    ...(state.type === "docker-container" && state.publicProtocol
+      ? { publicProtocol: state.publicProtocol }
       : {}),
   } as SandboxState;
 }

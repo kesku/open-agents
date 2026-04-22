@@ -1,0 +1,9 @@
+.git
+node_modules
+.next
+.turbo
+apps/web/.next
+apps/web/node_modules
+packages/*/node_modules
+**/.DS_Store
+PLAN.md

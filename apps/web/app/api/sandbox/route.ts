@@ -44,7 +44,7 @@ interface CreateSandboxRequest {
   branch?: string;
   isNewBranch?: boolean;
   sessionId?: string;
-  sandboxType?: "vercel" | "proxmox-lxc";
+  sandboxType?: "vercel" | "proxmox-lxc" | "docker-container";
 }
 
 async function syncVercelCliAuthForSandbox(params: {
@@ -164,19 +164,33 @@ export async function POST(req: Request) {
 
   try {
     reservedState =
-      sandboxType === "proxmox-lxc"
+      sandboxType === "docker-container"
         ? sessionId
-          ? await reserveProxmoxLease(sessionId, source)
+          ? await ensureDockerSessionSandbox({
+              sessionId,
+              currentState:
+                sessionRecord?.sandboxState?.type === "docker-container"
+                  ? sessionRecord.sandboxState
+                  : null,
+              source,
+            })
           : null
-        : ({
-            type: "vercel",
-            ...(sandboxName ? { sandboxName } : {}),
-            source,
-          } satisfies SandboxState);
+        : sandboxType === "proxmox-lxc"
+          ? sessionId
+            ? await reserveProxmoxLease(sessionId, source)
+            : null
+          : ({
+              type: "vercel",
+              ...(sandboxName ? { sandboxName } : {}),
+              source,
+            } satisfies SandboxState);
 
-    if (sandboxType === "proxmox-lxc" && !reservedState) {
+    if (
+      (sandboxType === "proxmox-lxc" || sandboxType === "docker-container") &&
+      !reservedState
+    ) {
       return Response.json(
-        { error: "Local Proxmox sandboxes require a session id" },
+        { error: "Local sandbox backends require a session id" },
         { status: 400 },
       );
     }
@@ -254,12 +268,13 @@ export async function POST(req: Request) {
       timing: { readyMs },
     });
   } catch (error) {
-    if (sessionId && reservedState?.type === "proxmox-lxc") {
+    if (
+      sessionId &&
+      (reservedState?.type === "proxmox-lxc" ||
+        reservedState?.type === "docker-container")
+    ) {
       await updateSession(sessionId, {
-        sandboxState: {
-          type: "proxmox-lxc",
-          ...(reservedState.source ? { source: reservedState.source } : {}),
-        },
+        sandboxState: clearSandboxState(reservedState),
       });
     }
 
@@ -268,6 +283,20 @@ export async function POST(req: Request) {
         {
           error: error.message,
           reason: error.reason,
+        },
+        { status: 409 },
+      );
+    }
+
+    if (
+      error instanceof Error &&
+      "reason" in error &&
+      error.reason === "capacity-exhausted"
+    ) {
+      return Response.json(
+        {
+          error: error.message,
+          reason: "capacity-exhausted",
         },
         { status: 409 },
       );
@@ -338,4 +367,29 @@ export async function DELETE(req: Request) {
   });
 
   return Response.json({ success: true });
+}
+
+async function ensureDockerSessionSandbox(params: {
+  sessionId: string;
+  currentState:
+    | Extract<SandboxState, { type: "docker-container" }>
+    | null
+    | undefined;
+  source:
+    | {
+        repo: string;
+        branch?: string;
+        newBranch?: string;
+      }
+    | undefined;
+}) {
+  const { getSandboxSupervisor } = await import("@/lib/sandbox/supervisor");
+
+  return getSandboxSupervisor().ensureSessionSandbox({
+    sessionId: params.sessionId,
+    currentState: params.currentState,
+    source: params.source,
+    timeoutMs: DEFAULT_SANDBOX_TIMEOUT_MS,
+    ports: DEFAULT_SANDBOX_PORTS,
+  });
 }

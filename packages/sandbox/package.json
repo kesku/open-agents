@@ -6,6 +6,7 @@
   "main": "./index.ts",
   "exports": {
     ".": "./index.ts",
+    "./docker": "./docker/index.ts",
     "./interface.js": "./interface.ts",
     "./types.js": "./types.ts",
     "./vercel": "./vercel/index.ts",

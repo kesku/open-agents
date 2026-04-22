@@ -30,6 +30,11 @@ type ErrorWithCause = {
 };
 
 const url = process.env.POSTGRES_URL;
+if (process.env.SKIP_DB_MIGRATE === "true") {
+  console.log("SKIP_DB_MIGRATE=true — skipping migrations");
+  process.exit(0);
+}
+
 if (!url) {
   console.log("POSTGRES_URL not set — skipping migrations");
   process.exit(0);

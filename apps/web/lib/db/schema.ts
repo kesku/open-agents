@@ -375,8 +375,8 @@ export const userPreferences = pgTable("user_preferences", {
   defaultModelId: text("default_model_id").default("openai/gpt-5.4"),
   defaultSubagentModelId: text("default_subagent_model_id"),
   defaultSandboxType: text("default_sandbox_type", {
-    enum: ["vercel", "proxmox-lxc"],
-  }).default("vercel"),
+    enum: ["vercel", "proxmox-lxc", "docker-container"],
+  }).default("docker-container"),
   defaultDiffMode: text("default_diff_mode", {
     enum: ["unified", "split"],
   }).default("unified"),

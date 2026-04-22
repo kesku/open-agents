@@ -4,25 +4,22 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-Deploy the current working tree to the homelab web container.
+Deploy the current working tree to the homelab platform host.
 
 Usage:
   scripts/deploy-homelab.sh [--skip-checks] [--skip-build] [--skip-tools]
 
 Options:
   --skip-checks  Skip local `bun run ci` before deploying.
-  --skip-build   Sync files only; skip remote install/build/restart.
-  --skip-tools   Skip homelab tool bootstrap before syncing.
+  --skip-build   Sync files only; skip remote build/restart.
+  --skip-tools   Skip homelab container-runtime validation before syncing.
   -h, --help     Show this help text.
 
 Environment overrides:
-  OPEN_AGENTS_HOMELAB_SSH_TARGET   SSH target for the Proxmox host (default: homelab)
-  OPEN_AGENTS_HOMELAB_CT_ID        Web app container ID (default: 141)
-  OPEN_AGENTS_HOMELAB_REPO_DIR     Repo path inside the container (default: /opt/open-agents)
-  OPEN_AGENTS_HOMELAB_ENV_SCRIPT   Runtime env script inside the container (default: /root/open-agents-env.sh)
-  OPEN_AGENTS_HOMELAB_SERVICE      Systemd service name (default: open-agents.service)
-  OPEN_AGENTS_HOMELAB_BUN          Bun binary inside the container (default: /usr/local/bin/bun)
-  OPEN_AGENTS_HOMELAB_HEALTH_PATH  Health probe path after restart (default: /sessions)
+  OPEN_AGENTS_HOMELAB_SSH_TARGET   SSH target for the platform host (default: open-agents-platform)
+  OPEN_AGENTS_HOMELAB_REPO_DIR     Repo path on the host (default: /opt/open-agents)
+  OPEN_AGENTS_HOMELAB_ENV_FILE     Runtime env file on the host (default: /etc/open-agents/platform.env)
+  OPEN_AGENTS_HOMELAB_HEALTH_URL   Health probe URL after restart (default: http://127.0.0.1/sessions)
 EOF
 }
 
@@ -58,13 +55,10 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "${script_dir}/.." && pwd)"
 lock_dir="${repo_root}/.git/open-agents-homelab-deploy.lock"
 
-ssh_target="${OPEN_AGENTS_HOMELAB_SSH_TARGET:-homelab}"
-ct_id="${OPEN_AGENTS_HOMELAB_CT_ID:-141}"
+ssh_target="${OPEN_AGENTS_HOMELAB_SSH_TARGET:-open-agents-platform}"
 remote_repo_dir="${OPEN_AGENTS_HOMELAB_REPO_DIR:-/opt/open-agents}"
-remote_env_script="${OPEN_AGENTS_HOMELAB_ENV_SCRIPT:-/root/open-agents-env.sh}"
-remote_service="${OPEN_AGENTS_HOMELAB_SERVICE:-open-agents.service}"
-remote_bun="${OPEN_AGENTS_HOMELAB_BUN:-/usr/local/bin/bun}"
-remote_health_path="${OPEN_AGENTS_HOMELAB_HEALTH_PATH:-/sessions}"
+remote_env_file="${OPEN_AGENTS_HOMELAB_ENV_FILE:-/etc/open-agents/platform.env}"
+remote_health_url="${OPEN_AGENTS_HOMELAB_HEALTH_URL:-http://127.0.0.1/sessions}"
 
 cleanup() {
   rmdir "${lock_dir}" 2>/dev/null || true
@@ -85,11 +79,11 @@ if [[ "${run_checks}" -eq 1 ]]; then
 fi
 
 if [[ "${run_tools}" -eq 1 ]]; then
-  echo "Ensuring homelab tools are installed..."
+  echo "Checking homelab container runtime..."
   "${script_dir}/ensure-homelab-tools.sh"
 fi
 
-echo "Syncing repository to ${ssh_target} (CT ${ct_id})..."
+echo "Syncing repository to ${ssh_target}..."
 
 tar_args=(
   --exclude=".git"
@@ -112,7 +106,7 @@ elif tar --help 2>&1 | grep -q -- "--no-mac-metadata"; then
 fi
 
 COPYFILE_DISABLE=1 COPY_EXTENDED_ATTRIBUTES_DISABLE=1 tar "${tar_args[@]}" | ssh "${ssh_target}" \
-  "pct exec ${ct_id} -- bash -lc '
+  "bash -lc '
     set -euo pipefail
     tmp_dir=\$(mktemp -d /tmp/open-agents-deploy.XXXXXX)
     trap \"rm -rf \\\"\${tmp_dir}\\\"\" EXIT
@@ -131,25 +125,26 @@ if [[ "${run_build}" -ne 1 ]]; then
   exit 0
 fi
 
-echo "Installing dependencies, building, and restarting the app..."
+echo "Building sandbox image and restarting the platform..."
 
 ssh "${ssh_target}" \
-  "pct exec ${ct_id} -- bash -lc '
+  "bash -lc '
     set -euo pipefail
+    test -f \"${remote_env_file}\"
     cd \"${remote_repo_dir}\"
-    ${remote_bun} install --frozen-lockfile
-    source \"${remote_env_script}\"
-    cd \"${remote_repo_dir}/apps/web\"
-    NODE_OPTIONS=--max-old-space-size=2048 ${remote_bun} run build
-    systemctl restart \"${remote_service}\"
-    systemctl is-active \"${remote_service}\" >/dev/null
+    set -a
+    source \"${remote_env_file}\"
+    set +a
+    export OPEN_AGENTS_ENV_FILE=\"${remote_env_file}\"
+    docker build -f docker/sandbox/Dockerfile -t \"\${SANDBOX_IMAGE:-open-agents-sandbox:local}\" .
+    docker compose --env-file \"${remote_env_file}\" up -d --build --remove-orphans
     for attempt in \$(seq 1 30); do
-      if curl -fsS \"http://127.0.0.1:3000${remote_health_path}\" >/dev/null 2>&1; then
+      if curl -fsS \"${remote_health_url}\" >/dev/null 2>&1; then
         exit 0
       fi
       sleep 1
     done
-    echo \"Timed out waiting for ${remote_service} health check.\" >&2
+    echo \"Timed out waiting for platform health check.\" >&2
     exit 1
   '"
 

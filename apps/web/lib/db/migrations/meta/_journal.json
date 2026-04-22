@@ -218,6 +218,13 @@
       "when": 1776210674409,
       "tag": "0030_odd_sprite",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1776586915968,
+      "tag": "0031_small_spacker_dave",
+      "breakpoints": true
     }
   ]
 }

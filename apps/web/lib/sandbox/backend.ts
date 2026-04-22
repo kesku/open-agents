@@ -1,6 +1,10 @@
 import type { SandboxState } from "@open-harness/sandbox";
 
-export const SANDBOX_TYPES = ["vercel", "proxmox-lxc"] as const;
+export const SANDBOX_TYPES = [
+  "vercel",
+  "proxmox-lxc",
+  "docker-container",
+] as const;
 
 export type AppSandboxType = (typeof SANDBOX_TYPES)[number];
 
@@ -12,7 +16,7 @@ export interface SandboxCapabilities {
   supportsSnapshots: boolean;
 }
 
-const DEFAULT_SANDBOX_BACKEND: AppSandboxType = "proxmox-lxc";
+const DEFAULT_SANDBOX_BACKEND: AppSandboxType = "docker-container";
 
 const SANDBOX_CAPABILITIES: Record<AppSandboxType, SandboxCapabilities> = {
   vercel: {
@@ -29,6 +33,13 @@ const SANDBOX_CAPABILITIES: Record<AppSandboxType, SandboxCapabilities> = {
     supportsResume: false,
     supportsSnapshots: false,
   },
+  "docker-container": {
+    supportsDiff: true,
+    supportsPreviewUrls: true,
+    supportsRepoCreation: true,
+    supportsResume: false,
+    supportsSnapshots: false,
+  },
 };
 
 function normalizeSandboxType(value: string | undefined): AppSandboxType {
@@ -37,6 +48,10 @@ function normalizeSandboxType(value: string | undefined): AppSandboxType {
   }
 
   if (value === "proxmox-lxc") {
+    return value;
+  }
+
+  if (value === "docker-container") {
     return value;
   }
 
@@ -76,9 +91,17 @@ export function getSandboxCapabilities(
 }
 
 export function getSandboxOptionLabel(type: AppSandboxType): string {
+  if (type === "docker-container") {
+    return "Docker Container";
+  }
+
   return type === "proxmox-lxc" ? "Proxmox LXC" : "Legacy Vercel";
 }
 
 export function getSandboxOptionDescription(type: AppSandboxType): string {
+  if (type === "docker-container") {
+    return "Local container platform";
+  }
+
   return type === "proxmox-lxc" ? "Local SSH pool" : "Legacy cloud sandbox";
 }

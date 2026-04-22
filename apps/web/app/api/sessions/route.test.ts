@@ -118,12 +118,12 @@ describe("/api/sessions POST", () => {
       repoOwner: "vercel",
       repoName: "open-harness",
       branch: "main",
-      sandboxState: { type: "proxmox-lxc" },
+      sandboxState: { type: "docker-container" },
       globalSkillRefs: [{ source: "local/skills", skillName: "ai-sdk" }],
       autoCommitPushOverride: false,
       autoCreatePrOverride: false,
     });
-    expect(body.session.sandboxState).toEqual({ type: "proxmox-lxc" });
+    expect(body.session.sandboxState).toEqual({ type: "docker-container" });
     expect(body.chat.modelId).toBe("openai/gpt-5.4");
   });
 

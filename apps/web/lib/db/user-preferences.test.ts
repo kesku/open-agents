@@ -13,7 +13,7 @@ describe("toUserPreferencesData", () => {
     expect(toUserPreferencesData()).toEqual({
       defaultModelId: "openai/gpt-5.4",
       defaultSubagentModelId: null,
-      defaultSandboxType: "proxmox-lxc",
+      defaultSandboxType: "docker-container",
       defaultDiffMode: "unified",
       autoCommitPush: false,
       autoCreatePr: false,
@@ -44,7 +44,7 @@ describe("toUserPreferencesData", () => {
       enabledModelIds: [],
     });
 
-    expect(result.defaultSandboxType).toBe("proxmox-lxc");
+    expect(result.defaultSandboxType).toBe("docker-container");
     expect(result.defaultDiffMode).toBe("unified");
   });
 

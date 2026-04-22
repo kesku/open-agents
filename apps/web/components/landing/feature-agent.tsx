@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 const tools = [
   { name: "grep", detail: "sandbox lifecycle in apps/web/" },
-  { name: "read", detail: "packages/sandbox/proxmox/sandbox.ts" },
+  { name: "read", detail: "packages/sandbox/docker/sandbox.ts" },
   { name: "write", detail: "apps/web/lib/model-catalog.ts" },
   { name: "edit", detail: "apps/web/app/settings/accounts-section.tsx" },
   { name: "bash", detail: "bun run ci" },
@@ -82,8 +82,8 @@ export function FeatureAgent() {
           className="mt-5 text-[12px] leading-relaxed text-(--l-panel-fg-2) transition-opacity duration-500"
           style={{ opacity: count >= tools.length ? 1 : 0 }}
         >
-          local-first cleanup complete. Proxmox runtime, GitHub token wiring,
-          and model catalog all verified.
+          local-first cleanup complete. Docker sandbox runtime, GitHub token
+          wiring, and model catalog all verified.
         </div>
       </div>
     </div>

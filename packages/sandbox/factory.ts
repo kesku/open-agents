@@ -1,3 +1,5 @@
+import { connectDockerContainer } from "./docker/connect";
+import type { DockerContainerState } from "./docker/state";
 import type { Sandbox, SandboxHooks } from "./interface";
 import type { SandboxStatus } from "./types";
 import { connectProxmoxLxc } from "./proxmox/connect";
@@ -14,7 +16,8 @@ export type { SandboxStatus };
  */
 export type SandboxState =
   | ({ type: "vercel" } & VercelState)
-  | ({ type: "proxmox-lxc" } & ProxmoxLxcState);
+  | ({ type: "proxmox-lxc" } & ProxmoxLxcState)
+  | ({ type: "docker-container" } & DockerContainerState);
 
 /**
  * Base connect options for all sandbox types.
@@ -71,13 +74,24 @@ export async function connectSandbox(
 
   if (isNewApi) {
     const config = configOrState as SandboxConnectConfig;
-    return config.state.type === "proxmox-lxc"
-      ? connectProxmoxLxc(config.state, config.options)
-      : connectVercel(config.state, config.options);
+    return connectByType(config.state, config.options);
   }
 
   const state = configOrState as SandboxState;
-  return state.type === "proxmox-lxc"
-    ? connectProxmoxLxc(state, legacyOptions)
-    : connectVercel(state, legacyOptions);
+  return connectByType(state, legacyOptions);
+}
+
+function connectByType(
+  state: SandboxState,
+  options?: ConnectOptions,
+): Promise<Sandbox> {
+  if (state.type === "docker-container") {
+    return connectDockerContainer(state, options);
+  }
+
+  if (state.type === "proxmox-lxc") {
+    return connectProxmoxLxc(state, options);
+  }
+
+  return connectVercel(state, options);
 }

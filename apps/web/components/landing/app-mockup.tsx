@@ -47,7 +47,7 @@ const sessions: readonly FakeSession[] = [
     files: [
       "lib/github/local-github.ts",
       "app/settings/accounts-section.tsx",
-      "packages/sandbox/proxmox/sandbox.ts",
+      "packages/sandbox/docker/sandbox.ts",
     ],
   },
   {
@@ -73,7 +73,7 @@ const sessions: readonly FakeSession[] = [
     branch: "deploy/homelab-sync",
     prompt: "Ship the latest cleanup to the homelab automatically",
     summary:
-      "Ran the homelab deploy script, preserved the remote caches, restarted the app service, and verified the sessions page came back healthy.",
+      "Ran the homelab deploy script, rebuilt the platform stack, refreshed the sandbox image, and verified the sessions page came back healthy.",
     toolCount: 7,
     todoTotal: 3,
     todoDone: 3,
