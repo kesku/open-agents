@@ -1,5 +1,7 @@
 FROM oven/bun:1.2.14
 
+ENV COREPACK_HOME=/usr/local/share/corepack
+
 RUN apt-get update && \
   DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
     ca-certificates \
@@ -32,6 +34,7 @@ RUN apt-get update && \
     tini && \
   ln -sf /usr/bin/fdfind /usr/local/bin/fd && \
   python3 -m pip install --no-cache-dir --break-system-packages uv && \
+  mkdir -p "${COREPACK_HOME}" && \
   corepack enable && \
   corepack prepare pnpm@latest --activate && \
   corepack prepare yarn@1.22.22 --activate && \
@@ -49,7 +52,7 @@ RUN mkdir -p /workspace && \
     /home/bun/.local/bin \
     /home/bun/.local/share/pnpm \
     /home/bun/.npm && \
-  chown -R bun:bun /workspace /home/bun
+  chown -R bun:bun /workspace /home/bun "${COREPACK_HOME}"
 
 ENV HOME=/home/bun
 ENV BROWSER=/usr/bin/chromium
