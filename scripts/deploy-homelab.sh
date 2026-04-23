@@ -20,6 +20,7 @@ Environment overrides:
   OPEN_AGENTS_HOMELAB_REPO_DIR     Repo path on the host (default: /opt/open-agents)
   OPEN_AGENTS_HOMELAB_ENV_FILE     Runtime env file on the host (default: /etc/open-agents/platform.env)
   OPEN_AGENTS_HOMELAB_HEALTH_URL   Health probe URL after restart (default: http://127.0.0.1/sessions)
+  OPEN_AGENTS_HOMELAB_HEALTH_HOST  Host header for the health probe (default: openagents.kesku.me)
 EOF
 }
 
@@ -59,6 +60,7 @@ ssh_target="${OPEN_AGENTS_HOMELAB_SSH_TARGET:-open-agents-platform}"
 remote_repo_dir="${OPEN_AGENTS_HOMELAB_REPO_DIR:-/opt/open-agents}"
 remote_env_file="${OPEN_AGENTS_HOMELAB_ENV_FILE:-/etc/open-agents/platform.env}"
 remote_health_url="${OPEN_AGENTS_HOMELAB_HEALTH_URL:-http://127.0.0.1/sessions}"
+remote_health_host="${OPEN_AGENTS_HOMELAB_HEALTH_HOST:-openagents.kesku.me}"
 
 cleanup() {
   rmdir "${lock_dir}" 2>/dev/null || true
@@ -139,7 +141,7 @@ ssh "${ssh_target}" \
     docker build -f docker/sandbox/Dockerfile -t \"\${SANDBOX_IMAGE:-open-agents-sandbox:local}\" .
     docker compose --env-file \"${remote_env_file}\" up -d --build --remove-orphans
     for attempt in \$(seq 1 30); do
-      if curl -fsS \"${remote_health_url}\" >/dev/null 2>&1; then
+      if curl -fsS -H \"Host: ${remote_health_host}\" \"${remote_health_url}\" >/dev/null 2>&1; then
         exit 0
       fi
       sleep 1
