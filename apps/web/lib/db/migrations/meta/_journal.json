@@ -225,6 +225,13 @@
       "when": 1776586915968,
       "tag": "0031_small_spacker_dave",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1776848655619,
+      "tag": "0032_drop_legacy_github_accounts",
+      "breakpoints": true
     }
   ]
 }
