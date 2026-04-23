@@ -15,6 +15,7 @@ const {
   shouldRefreshAfterReadyTransition,
   shouldRenderGitDataPart,
   shouldShowThinkingIndicator,
+  shouldUseChatListStreamingState,
 } = await import("./chat-streaming-state");
 
 type ChatMessage = Parameters<typeof getNavbarGitActionState>[0][number];
@@ -112,6 +113,50 @@ describe("chat streaming state", () => {
         lastMessageRole: "assistant",
       }),
     ).toBe(true);
+  });
+
+  test("uses chat list streaming state when local chat status has not reconnected yet", () => {
+    expect(
+      shouldUseChatListStreamingState({
+        status: "ready",
+        hasChatListStreaming: true,
+        userStopped: false,
+        hasAssistantRenderableContent: false,
+        lastMessageRole: "user",
+      }),
+    ).toBe(true);
+
+    expect(
+      shouldUseChatListStreamingState({
+        status: "ready",
+        hasChatListStreaming: true,
+        userStopped: false,
+        hasAssistantRenderableContent: false,
+        lastMessageRole: "assistant",
+      }),
+    ).toBe(true);
+  });
+
+  test("does not use chat list streaming state after stop or visible assistant output", () => {
+    expect(
+      shouldUseChatListStreamingState({
+        status: "ready",
+        hasChatListStreaming: true,
+        userStopped: true,
+        hasAssistantRenderableContent: false,
+        lastMessageRole: "user",
+      }),
+    ).toBe(false);
+
+    expect(
+      shouldUseChatListStreamingState({
+        status: "ready",
+        hasChatListStreaming: true,
+        userStopped: false,
+        hasAssistantRenderableContent: true,
+        lastMessageRole: "assistant",
+      }),
+    ).toBe(false);
   });
 
   test("derives pending commit state from the latest assistant git message", () => {
