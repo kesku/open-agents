@@ -91,6 +91,9 @@ describe("DockerContainerSandbox.environmentDetails", () => {
     expect(sandbox.environmentDetails).toContain("GH_TOKEN");
     expect(sandbox.environmentDetails).toContain("GITHUB_TOKEN");
     expect(sandbox.environmentDetails).toContain("Prefer `gh`");
+    expect(sandbox.environmentDetails).toContain("pnpm");
+    expect(sandbox.environmentDetails).toContain("Python/pip/venv/uv");
+    expect(sandbox.environmentDetails).toContain("ripgrep/fd");
     expect(sandbox.environmentDetails).toContain(
       "https://oa-123-3000.sandboxes.example.test",
     );

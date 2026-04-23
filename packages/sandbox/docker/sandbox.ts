@@ -229,6 +229,7 @@ export class DockerContainerSandbox implements Sandbox {
     return `- Sandbox runtime is an ephemeral Docker container managed by the local platform
 - The working directory is ${this.workingDirectory}
 - All bash commands already run in the working directory by default — never prepend \`cd <working-directory> &&\`; just run the command directly
+- Common project tooling is preinstalled: Node.js/npm, bun, pnpm, Yarn, Python/pip/venv/uv, git, gh, ripgrep/fd, build-essential, Chromium, and code-server
 - Detached processes live for as long as the sandbox container stays alive and are killed when the sandbox is removed
 - Releasing the sandbox removes the container and its mounted workspace${githubText}${previewText}`;
   }

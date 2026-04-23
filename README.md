@@ -62,6 +62,10 @@ The deploy script:
 - runs `docker compose up -d --build --remove-orphans`
 - waits for the app health check to come back
 
+Sandbox containers are intentionally pre-warmed with the common agent toolchain:
+Node.js/npm, bun, pnpm, Yarn, Python/pip/venv/uv, git, gh, ripgrep/fd,
+native build tools, Chromium, and code-server.
+
 Useful overrides:
 
 - `OPEN_AGENTS_HOMELAB_SSH_TARGET`
