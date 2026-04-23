@@ -104,11 +104,9 @@ function getProviderOptionsProvider(baseModelId: string): string | undefined {
     return undefined;
   }
 
-  if (provider === "perplexity") {
-    return "openai";
-  }
-
-  return provider;
+  // All currently supported non-OpenAI providers are routed through the
+  // OpenAI-compatible client, so their provider options use the OpenAI shape.
+  return "openai";
 }
 
 export function toProviderOptionsByProvider(

@@ -64,7 +64,7 @@ export function LandingFeatures() {
             bullets={[
               "File ops, search, shell, and task delegation built in",
               "Explorer and executor subagents for parallel work",
-              "OpenAI and Perplexity models in one catalog",
+              "OpenAI and custom provider models in one catalog",
             ]}
             window={<FeatureAgent />}
           />

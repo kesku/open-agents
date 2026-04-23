@@ -2,6 +2,7 @@
 
 import {
   ArrowLeft,
+  Boxes,
   Cable,
   Menu,
   Settings as SettingsIcon,
@@ -30,6 +31,12 @@ const sidebarItems = [
     label: "Preferences",
     href: "/settings/preferences",
     icon: SettingsIcon,
+  },
+  {
+    id: "models",
+    label: "Models",
+    href: "/settings/models",
+    icon: Boxes,
   },
   {
     id: "model-variants",

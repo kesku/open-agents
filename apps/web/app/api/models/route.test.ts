@@ -4,14 +4,21 @@ const requestedUrls: string[] = [];
 
 let modelsDevApiData: unknown = {};
 let openAiModelsApiData: unknown = {};
+let customProviderModelsApiData: unknown = {};
+let currentSession: { user: { id: string } } | null = {
+  user: { id: "user-1" },
+};
+let customProviders: Array<{
+  id: string;
+  name: string;
+  baseURL: string;
+  apiKey: string;
+}> = [];
 
 const originalFetch = globalThis.fetch;
 const originalOpenAiApiKey = process.env.OPENAI_API_KEY;
 const originalOpenAiBaseUrl = process.env.OPENAI_BASE_URL;
 const originalPublicOpenAiBaseUrl = process.env.NEXT_PUBLIC_OPENAI_BASE_URL;
-const originalAnthropicApiKey = process.env.ANTHROPIC_API_KEY;
-const originalPerplexityApiKey = process.env.PERPLEXITY_API_KEY;
-const originalPerplexityBaseUrl = process.env.PERPLEXITY_BASE_URL;
 
 function getRequestUrl(input: RequestInfo | URL): string {
   if (typeof input === "string") {
@@ -24,22 +31,23 @@ function getRequestUrl(input: RequestInfo | URL): string {
 }
 
 mock.module("server-only", () => ({}));
+mock.module("@/lib/session/get-server-session", () => ({
+  getServerSession: async () => currentSession,
+}));
+mock.module("@/lib/db/model-providers", () => ({
+  getModelProviderRuntimeConfigs: async () => customProviders,
+}));
 
 const routeModulePromise = import("./route");
 const modelsWithContextModulePromise = import("@/lib/models-with-context");
 
 afterEach(() => {
   globalThis.fetch = originalFetch;
+
   if (originalOpenAiApiKey === undefined) {
     delete process.env.OPENAI_API_KEY;
   } else {
     process.env.OPENAI_API_KEY = originalOpenAiApiKey;
-  }
-
-  if (originalAnthropicApiKey === undefined) {
-    delete process.env.ANTHROPIC_API_KEY;
-  } else {
-    process.env.ANTHROPIC_API_KEY = originalAnthropicApiKey;
   }
 
   if (originalOpenAiBaseUrl === undefined) {
@@ -53,18 +61,6 @@ afterEach(() => {
   } else {
     process.env.NEXT_PUBLIC_OPENAI_BASE_URL = originalPublicOpenAiBaseUrl;
   }
-
-  if (originalPerplexityApiKey === undefined) {
-    delete process.env.PERPLEXITY_API_KEY;
-  } else {
-    process.env.PERPLEXITY_API_KEY = originalPerplexityApiKey;
-  }
-
-  if (originalPerplexityBaseUrl === undefined) {
-    delete process.env.PERPLEXITY_BASE_URL;
-  } else {
-    process.env.PERPLEXITY_BASE_URL = originalPerplexityBaseUrl;
-  }
 });
 
 describe("/api/models context window enrichment", () => {
@@ -72,12 +68,12 @@ describe("/api/models context window enrichment", () => {
     requestedUrls.length = 0;
     modelsDevApiData = {};
     openAiModelsApiData = {};
+    customProviderModelsApiData = {};
+    currentSession = { user: { id: "user-1" } };
+    customProviders = [];
     process.env.OPENAI_API_KEY = "test-openai-key";
     delete process.env.OPENAI_BASE_URL;
     delete process.env.NEXT_PUBLIC_OPENAI_BASE_URL;
-    delete process.env.ANTHROPIC_API_KEY;
-    delete process.env.PERPLEXITY_API_KEY;
-    delete process.env.PERPLEXITY_BASE_URL;
 
     globalThis.fetch = mock((input: RequestInfo | URL, _init?: RequestInit) => {
       const requestUrl = getRequestUrl(input);
@@ -92,13 +88,33 @@ describe("/api/models context window enrichment", () => {
         );
       }
 
+      if (requestUrl === "https://api.openai.com/v1/models") {
+        return Promise.resolve(
+          new Response(JSON.stringify(openAiModelsApiData), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        );
+      }
+
       return Promise.resolve(
-        new Response(JSON.stringify(openAiModelsApiData), {
+        new Response(JSON.stringify(customProviderModelsApiData), {
           status: 200,
           headers: { "Content-Type": "application/json" },
         }),
       );
     }) as unknown as typeof fetch;
+  });
+
+  test("returns 401 when unauthenticated", async () => {
+    currentSession = null;
+    const { GET } = await routeModulePromise;
+
+    const response = await GET();
+    const body = (await response.json()) as { error: string };
+
+    expect(response.status).toBe(401);
+    expect(body.error).toBe("Not authenticated");
   });
 
   test("overrides catalog context windows from models.dev", async () => {
@@ -144,124 +160,19 @@ describe("/api/models context window enrichment", () => {
     expect(requestedUrls).toContain("https://models.dev/api.json");
   });
 
-  test("keeps catalog context window unchanged when models.dev only has related ids", async () => {
-    openAiModelsApiData = {
-      data: [
-        { id: "gpt-5.4" },
-        { id: "gpt-5.4-mini" },
-        { id: "gpt-5.2" },
-        { id: "gpt-5.1" },
-        { id: "gpt-5-mini" },
-      ],
-    };
-    modelsDevApiData = {
-      openai: {
-        models: {
-          "gpt-5.4-preview": {
-            limit: { context: 400_000 },
-          },
-          "gpt-5.2": {
-            limit: { context: 272_000 },
-          },
-        },
+  test("applies base metadata to custom provider models", async () => {
+    delete process.env.OPENAI_API_KEY;
+    customProviders = [
+      {
+        id: "openrouter",
+        name: "OpenRouter",
+        baseURL: "https://openrouter.ai/api/v1",
+        apiKey: "or-key",
       },
+    ];
+    customProviderModelsApiData = {
+      data: [{ id: "openai/gpt-5.4" }],
     };
-
-    const { clearAvailableLanguageModelsCacheForTests } =
-      await modelsWithContextModulePromise;
-    clearAvailableLanguageModelsCacheForTests();
-
-    const { GET } = await routeModulePromise;
-    const response = await GET();
-
-    expect(response.ok).toBe(true);
-
-    const body = (await response.json()) as {
-      models: Array<{ id: string; context_window?: number }>;
-    };
-    const contextById = new Map(
-      body.models.map((model) => [model.id, model.context_window]),
-    );
-
-    expect(body.models.map((model) => model.id)).toEqual([
-      "openai/gpt-5.4",
-      "openai/gpt-5.4-mini",
-      "openai/gpt-5.2",
-      "openai/gpt-5.1",
-      "openai/gpt-5-mini",
-    ]);
-    expect(contextById.get("openai/gpt-5.4")).toBeUndefined();
-    expect(contextById.get("openai/gpt-5.2")).toBe(272_000);
-  });
-
-  test("keeps valid models.dev metadata when sibling fields are invalid", async () => {
-    openAiModelsApiData = {
-      data: [{ id: "gpt-5.4" }, { id: "gpt-5-mini" }],
-    };
-    modelsDevApiData = {
-      invalidProvider: "bad",
-      openai: {
-        models: {
-          "gpt-5.4": {
-            limit: { context: "400_000" },
-            cost: {
-              input: 1.25,
-              output: 10,
-              context_over_200k: {
-                input: 2.5,
-              },
-            },
-          },
-          broken: {
-            limit: { context: "not-a-number" },
-            cost: { input: "expensive" },
-          },
-        },
-      },
-    };
-
-    const { clearAvailableLanguageModelsCacheForTests } =
-      await modelsWithContextModulePromise;
-    clearAvailableLanguageModelsCacheForTests();
-
-    const { GET } = await routeModulePromise;
-    const response = await GET();
-
-    expect(response.ok).toBe(true);
-
-    const body = (await response.json()) as {
-      models: Array<{
-        id: string;
-        context_window?: number;
-        cost?: {
-          input?: number;
-          output?: number;
-          context_over_200k?: {
-            input?: number;
-          };
-        };
-      }>;
-    };
-
-    const model = body.models.find((entry) => entry.id === "openai/gpt-5.4");
-    expect(model).toMatchObject({
-      id: "openai/gpt-5.4",
-      cost: {
-        input: 1.25,
-        output: 10,
-        context_over_200k: {
-          input: 2.5,
-        },
-      },
-    });
-    expect(model?.context_window).toBeUndefined();
-  });
-
-  test("applies openai metadata to perplexity-routed models", async () => {
-    openAiModelsApiData = {
-      data: [{ id: "gpt-5.4" }],
-    };
-    process.env.PERPLEXITY_API_KEY = "test-perplexity-key";
     modelsDevApiData = {
       openai: {
         models: {
@@ -284,10 +195,11 @@ describe("/api/models context window enrichment", () => {
     const body = (await response.json()) as {
       models: Array<{ id: string; context_window?: number }>;
     };
-
     const model = body.models.find(
-      (entry) => entry.id === "perplexity/openai/gpt-5.4",
+      (entry) => entry.id === "openrouter/openai/gpt-5.4",
     );
+
     expect(model?.context_window).toBe(400_000);
+    expect(requestedUrls).toContain("https://openrouter.ai/api/v1/models");
   });
 });

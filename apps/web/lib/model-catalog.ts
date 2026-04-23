@@ -1,11 +1,13 @@
 import "server-only";
 
+import type { OpenAICompatibleProviderConfig } from "@open-harness/agent";
+import { getModelProviderRuntimeConfigs } from "./db/model-providers";
 import { filterDisabledModels } from "./model-availability";
-import type { AvailableModel, AvailableModelProvider } from "./models";
+import type { AvailableModel } from "./models";
 
-const OPENAI_MODELS_TIMEOUT_MS = 1_500;
-const OPENAI_MODELS_CACHE_TTL_MS = 15 * 60 * 1_000;
-const OPENAI_MODELS_ENDPOINT_PATH = "/models";
+const MODELS_TIMEOUT_MS = 1_500;
+const MODELS_CACHE_TTL_MS = 15 * 60 * 1_000;
+const MODELS_ENDPOINT_PATH = "/models";
 const DEFAULT_OPENAI_BASE_URL = "https://api.openai.com/v1";
 
 const collator = new Intl.Collator(undefined, {
@@ -63,148 +65,18 @@ const OPENAI_FALLBACK_LANGUAGE_MODELS: AvailableModel[] = [
   },
 ];
 
-const PERPLEXITY_LANGUAGE_MODELS: AvailableModel[] = [
-  {
-    id: "perplexity/sonar",
-    name: "Sonar",
-    provider: "perplexity",
-    modelType: "language",
-    description: "Perplexity native search and answer model",
-  },
-  {
-    id: "perplexity/anthropic/claude-opus-4-6",
-    name: "Claude Opus 4.6 via Perplexity",
-    provider: "perplexity",
-    modelType: "language",
-    description:
-      "Anthropic Opus routed through Perplexity's OpenAI-compatible API",
-  },
-  {
-    id: "perplexity/anthropic/claude-opus-4-5",
-    name: "Claude Opus 4.5 via Perplexity",
-    provider: "perplexity",
-    modelType: "language",
-    description:
-      "Anthropic Opus routed through Perplexity's OpenAI-compatible API",
-  },
-  {
-    id: "perplexity/anthropic/claude-sonnet-4-6",
-    name: "Claude Sonnet 4.6 via Perplexity",
-    provider: "perplexity",
-    modelType: "language",
-    description:
-      "Anthropic Sonnet routed through Perplexity's OpenAI-compatible API",
-  },
-  {
-    id: "perplexity/anthropic/claude-sonnet-4-5",
-    name: "Claude Sonnet 4.5 via Perplexity",
-    provider: "perplexity",
-    modelType: "language",
-    description:
-      "Anthropic Sonnet routed through Perplexity's OpenAI-compatible API",
-  },
-  {
-    id: "perplexity/anthropic/claude-haiku-4-5",
-    name: "Claude Haiku 4.5 via Perplexity",
-    provider: "perplexity",
-    modelType: "language",
-    description:
-      "Anthropic Haiku routed through Perplexity's OpenAI-compatible API",
-  },
-  {
-    id: "perplexity/openai/gpt-5.4",
-    name: "GPT-5.4 via Perplexity",
-    provider: "perplexity",
-    modelType: "language",
-    description:
-      "OpenAI GPT-5.4 routed through Perplexity's OpenAI-compatible API",
-  },
-  {
-    id: "perplexity/openai/gpt-5.2",
-    name: "GPT-5.2 via Perplexity",
-    provider: "perplexity",
-    modelType: "language",
-    description:
-      "OpenAI GPT-5.2 routed through Perplexity's OpenAI-compatible API",
-  },
-  {
-    id: "perplexity/openai/gpt-5.1",
-    name: "GPT-5.1 via Perplexity",
-    provider: "perplexity",
-    modelType: "language",
-    description:
-      "OpenAI GPT-5.1 routed through Perplexity's OpenAI-compatible API",
-  },
-  {
-    id: "perplexity/openai/gpt-5-mini",
-    name: "GPT-5 Mini via Perplexity",
-    provider: "perplexity",
-    modelType: "language",
-    description:
-      "OpenAI GPT-5 Mini routed through Perplexity's OpenAI-compatible API",
-  },
-  {
-    id: "perplexity/google/gemini-3.1-pro-preview",
-    name: "Gemini 3.1 Pro Preview via Perplexity",
-    provider: "perplexity",
-    modelType: "language",
-    description:
-      "Google Gemini routed through Perplexity's OpenAI-compatible API",
-  },
-  {
-    id: "perplexity/google/gemini-3-flash-preview",
-    name: "Gemini 3 Flash Preview via Perplexity",
-    provider: "perplexity",
-    modelType: "language",
-    description:
-      "Google Gemini routed through Perplexity's OpenAI-compatible API",
-  },
-  {
-    id: "perplexity/nvidia/nemotron-3-super-120b-a12b",
-    name: "Nemotron 3 Super 120B A12B via Perplexity",
-    provider: "perplexity",
-    modelType: "language",
-    description:
-      "NVIDIA Nemotron routed through Perplexity's OpenAI-compatible API",
-  },
-  {
-    id: "perplexity/xai/grok-4-1-fast-non-reasoning",
-    name: "Grok 4.1 Fast Non-Reasoning via Perplexity",
-    provider: "perplexity",
-    modelType: "language",
-    description: "xAI Grok routed through Perplexity's OpenAI-compatible API",
-  },
-];
+type RuntimeProviderConfig = OpenAICompatibleProviderConfig & {
+  fallbackModels?: AvailableModel[];
+};
 
-let cachedOpenAILanguageModels:
-  | { expiresAt: number; models: AvailableModel[] }
+let cachedProviderModels:
+  | Map<string, { expiresAt: number; models: AvailableModel[] }>
   | undefined;
-let inFlightOpenAILanguageModels: Promise<AvailableModel[]> | undefined;
+let inFlightProviderModels: Map<string, Promise<AvailableModel[]>> | undefined;
 
 function hasConfiguredEnv(name: string): boolean {
   const value = process.env[name];
   return typeof value === "string" && value.trim().length > 0;
-}
-
-function getConfiguredProviderIds(): AvailableModelProvider[] {
-  const configuredProviders: AvailableModelProvider[] = [];
-
-  if (
-    hasConfiguredEnv("OPENAI_API_KEY") ||
-    hasConfiguredEnv("OPENAI_BASE_URL") ||
-    hasConfiguredEnv("NEXT_PUBLIC_OPENAI_BASE_URL")
-  ) {
-    configuredProviders.push("openai");
-  }
-
-  if (
-    hasConfiguredEnv("PERPLEXITY_API_KEY") ||
-    hasConfiguredEnv("PERPLEXITY_BASE_URL")
-  ) {
-    configuredProviders.push("perplexity");
-  }
-
-  return configuredProviders;
 }
 
 function withLeadingSlash(path: string): string {
@@ -215,21 +87,8 @@ function withoutTrailingSlash(value: string): string {
   return value.endsWith("/") ? value.slice(0, -1) : value;
 }
 
-function getOpenAIModelsEndpointUrl(): string {
-  const configuredBaseURL =
-    process.env.OPENAI_BASE_URL ??
-    process.env.NEXT_PUBLIC_OPENAI_BASE_URL ??
-    DEFAULT_OPENAI_BASE_URL;
-
-  return `${withoutTrailingSlash(configuredBaseURL)}${withLeadingSlash(OPENAI_MODELS_ENDPOINT_PATH)}`;
-}
-
-function shouldFetchOpenAIModelsFromApi(): boolean {
-  return (
-    hasConfiguredEnv("OPENAI_API_KEY") ||
-    hasConfiguredEnv("OPENAI_BASE_URL") ||
-    hasConfiguredEnv("NEXT_PUBLIC_OPENAI_BASE_URL")
-  );
+function getModelsEndpointUrl(baseURL: string): string {
+  return `${withoutTrailingSlash(baseURL)}${withLeadingSlash(MODELS_ENDPOINT_PATH)}`;
 }
 
 function toTitleWord(value: string): string {
@@ -309,6 +168,27 @@ function isOpenAILanguageModelId(modelId: string): boolean {
   return !excludedKeywords.some((keyword) => normalizedId.includes(keyword));
 }
 
+function isOpenAICompatibleLanguageModelId(modelId: string): boolean {
+  const normalizedId = modelId.trim().toLowerCase();
+  if (normalizedId.length === 0) {
+    return false;
+  }
+
+  const excludedKeywords = [
+    "audio",
+    "image",
+    "embedding",
+    "moderation",
+    "transcribe",
+    "translation",
+    "tts",
+    "speech",
+    "realtime",
+  ];
+
+  return !excludedKeywords.some((keyword) => normalizedId.includes(keyword));
+}
+
 function sortOpenAIModels(models: AvailableModel[]): AvailableModel[] {
   return [...models].sort((left, right) => {
     const leftFeaturedRank =
@@ -327,6 +207,14 @@ function sortOpenAIModels(models: AvailableModel[]): AvailableModel[] {
   });
 }
 
+function sortGenericModels(models: AvailableModel[]): AvailableModel[] {
+  return [...models].sort(
+    (left, right) =>
+      collator.compare(left.name, right.name) ||
+      collator.compare(left.id, right.id),
+  );
+}
+
 function dedupeModels(models: AvailableModel[]): AvailableModel[] {
   const modelsById = new Map<string, AvailableModel>();
 
@@ -337,47 +225,52 @@ function dedupeModels(models: AvailableModel[]): AvailableModel[] {
   return [...modelsById.values()];
 }
 
-function normalizeOpenAIModels(modelIds: string[]): AvailableModel[] {
-  return sortOpenAIModels(
-    dedupeModels(
-      modelIds.map((providerModelId) => ({
-        id: `openai/${providerModelId}`,
-        name: formatOpenAIModelName(providerModelId),
-        provider: "openai",
-        modelType: "language",
-        description: "Discovered from the OpenAI models API",
-      })),
-    ),
+function normalizeDiscoveredModels(
+  provider: RuntimeProviderConfig,
+  modelIds: string[],
+): AvailableModel[] {
+  const discoveredModels = dedupeModels(
+    modelIds.map((providerModelId) => ({
+      id: `${provider.id}/${providerModelId}`,
+      name:
+        provider.id === "openai"
+          ? formatOpenAIModelName(providerModelId)
+          : providerModelId,
+      provider: provider.id,
+      modelType: "language" as const,
+      description:
+        provider.id === "openai"
+          ? "Discovered from the OpenAI models API"
+          : `Discovered from ${provider.name} via /models`,
+    })),
   );
+
+  return provider.id === "openai"
+    ? sortOpenAIModels(discoveredModels)
+    : sortGenericModels(discoveredModels);
 }
 
-async function fetchOpenAILanguageModelsFromApi(): Promise<AvailableModel[]> {
-  if (!shouldFetchOpenAIModelsFromApi()) {
-    return OPENAI_FALLBACK_LANGUAGE_MODELS;
-  }
-
+async function fetchProviderLanguageModelsFromApi(
+  provider: RuntimeProviderConfig,
+): Promise<AvailableModel[]> {
   const controller = new AbortController();
-  const timeoutId = setTimeout(
-    () => controller.abort(),
-    OPENAI_MODELS_TIMEOUT_MS,
-  );
+  const timeoutId = setTimeout(() => controller.abort(), MODELS_TIMEOUT_MS);
 
   try {
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
     };
-    const apiKey = process.env.OPENAI_API_KEY?.trim();
-    if (apiKey) {
-      headers.Authorization = `Bearer ${apiKey}`;
+    if (provider.apiKey) {
+      headers.Authorization = `Bearer ${provider.apiKey}`;
     }
 
-    const response = await fetch(getOpenAIModelsEndpointUrl(), {
+    const response = await fetch(getModelsEndpointUrl(provider.baseURL), {
       headers,
       signal: controller.signal,
     });
 
     if (!response.ok) {
-      return OPENAI_FALLBACK_LANGUAGE_MODELS;
+      return provider.fallbackModels ?? [];
     }
 
     const data: unknown = await response.json();
@@ -387,7 +280,7 @@ async function fetchOpenAILanguageModelsFromApi(): Promise<AvailableModel[]> {
         : undefined;
 
     if (!Array.isArray(responseData)) {
-      return OPENAI_FALLBACK_LANGUAGE_MODELS;
+      return provider.fallbackModels ?? [];
     }
 
     const modelIds = responseData
@@ -400,79 +293,111 @@ async function fetchOpenAILanguageModelsFromApi(): Promise<AvailableModel[]> {
           : undefined,
       )
       .filter((value): value is string => value !== undefined)
-      .filter(isOpenAILanguageModelId);
+      .filter((value) =>
+        provider.id === "openai"
+          ? isOpenAILanguageModelId(value)
+          : isOpenAICompatibleLanguageModelId(value),
+      );
 
     if (modelIds.length === 0) {
-      return OPENAI_FALLBACK_LANGUAGE_MODELS;
+      return provider.fallbackModels ?? [];
     }
 
-    return normalizeOpenAIModels(modelIds);
+    return normalizeDiscoveredModels(provider, modelIds);
   } catch {
-    return OPENAI_FALLBACK_LANGUAGE_MODELS;
+    return provider.fallbackModels ?? [];
   } finally {
     clearTimeout(timeoutId);
   }
 }
 
-async function getOpenAILanguageModels(): Promise<AvailableModel[]> {
-  const now = Date.now();
-  if (
-    cachedOpenAILanguageModels &&
-    cachedOpenAILanguageModels.expiresAt > now
-  ) {
-    return cachedOpenAILanguageModels.models;
-  }
-
-  if (!inFlightOpenAILanguageModels) {
-    inFlightOpenAILanguageModels = fetchOpenAILanguageModelsFromApi().then(
-      (models) => {
-        const nextModels = sortOpenAIModels(dedupeModels(models));
-        cachedOpenAILanguageModels = {
-          expiresAt: Date.now() + OPENAI_MODELS_CACHE_TTL_MS,
-          models: nextModels,
-        };
-        return nextModels;
-      },
-    );
-  }
-
-  try {
-    return await inFlightOpenAILanguageModels;
-  } finally {
-    inFlightOpenAILanguageModels = undefined;
-  }
+function getProviderCacheKey(provider: RuntimeProviderConfig): string {
+  return `${provider.id}|${provider.baseURL}|${provider.apiKey}`;
 }
 
-async function getModelsForProvider(
-  providerId: AvailableModelProvider,
+async function getProviderModels(
+  provider: RuntimeProviderConfig,
 ): Promise<AvailableModel[]> {
-  switch (providerId) {
-    case "openai":
-      return getOpenAILanguageModels();
-    case "perplexity":
-      return PERPLEXITY_LANGUAGE_MODELS;
-    case "anthropic":
-      return [];
+  const now = Date.now();
+  cachedProviderModels ??= new Map();
+  inFlightProviderModels ??= new Map();
+
+  const cacheKey = getProviderCacheKey(provider);
+  const cachedModels = cachedProviderModels.get(cacheKey);
+  if (cachedModels && cachedModels.expiresAt > now) {
+    return cachedModels.models;
   }
-}
 
-export async function getAvailableLanguageModelsFromCatalog(): Promise<
-  AvailableModel[]
-> {
-  const configuredProviders = getConfiguredProviderIds();
-  const providerIds =
-    configuredProviders.length > 0
-      ? configuredProviders
-      : (["openai"] as const satisfies readonly AvailableModelProvider[]);
+  const existingPromise = inFlightProviderModels.get(cacheKey);
+  if (existingPromise) {
+    return existingPromise;
+  }
 
-  const modelsByProvider = await Promise.all(
-    providerIds.map((providerId) => getModelsForProvider(providerId)),
+  const requestPromise = fetchProviderLanguageModelsFromApi(provider).then(
+    (models) => {
+      cachedProviderModels?.set(cacheKey, {
+        expiresAt: Date.now() + MODELS_CACHE_TTL_MS,
+        models,
+      });
+      return models;
+    },
   );
 
+  inFlightProviderModels.set(cacheKey, requestPromise);
+
+  try {
+    return await requestPromise;
+  } finally {
+    inFlightProviderModels.delete(cacheKey);
+  }
+}
+
+function getOpenAIProviderConfig(): RuntimeProviderConfig {
+  return {
+    id: "openai",
+    name: "OpenAI",
+    baseURL:
+      process.env.OPENAI_BASE_URL?.trim() ||
+      process.env.NEXT_PUBLIC_OPENAI_BASE_URL?.trim() ||
+      DEFAULT_OPENAI_BASE_URL,
+    apiKey: process.env.OPENAI_API_KEY?.trim() || "",
+    fallbackModels: OPENAI_FALLBACK_LANGUAGE_MODELS,
+  };
+}
+
+async function getRuntimeProviders(
+  userId?: string,
+): Promise<RuntimeProviderConfig[]> {
+  const customProviders = userId
+    ? await getModelProviderRuntimeConfigs(userId)
+    : [];
+
+  const providers: RuntimeProviderConfig[] = [];
+
+  const hasOpenAIConfigured =
+    hasConfiguredEnv("OPENAI_API_KEY") ||
+    hasConfiguredEnv("OPENAI_BASE_URL") ||
+    hasConfiguredEnv("NEXT_PUBLIC_OPENAI_BASE_URL");
+
+  if (hasOpenAIConfigured || customProviders.length === 0) {
+    providers.push(getOpenAIProviderConfig());
+  }
+
+  providers.push(...customProviders);
+  return providers;
+}
+
+export async function getAvailableLanguageModelsFromCatalog(
+  userId?: string,
+): Promise<AvailableModel[]> {
+  const providers = await getRuntimeProviders(userId);
+  const modelsByProvider = await Promise.all(
+    providers.map((provider) => getProviderModels(provider)),
+  );
   return filterDisabledModels(modelsByProvider.flat());
 }
 
 export function clearModelCatalogCacheForTests(): void {
-  cachedOpenAILanguageModels = undefined;
-  inFlightOpenAILanguageModels = undefined;
+  cachedProviderModels = undefined;
+  inFlightProviderModels = undefined;
 }

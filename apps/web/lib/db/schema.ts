@@ -101,6 +101,29 @@ export const githubInstallations = pgTable(
   ],
 );
 
+export const modelProviders = pgTable(
+  "model_providers",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    providerId: text("provider_id").notNull(),
+    displayName: text("display_name").notNull(),
+    baseUrl: text("base_url").notNull(),
+    encryptedApiKey: text("encrypted_api_key").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("model_providers_user_provider_id_idx").on(
+      table.userId,
+      table.providerId,
+    ),
+    index("model_providers_user_id_idx").on(table.userId),
+  ],
+);
+
 export const vercelProjectLinks = pgTable(
   "vercel_project_links",
   {
@@ -335,6 +358,8 @@ export type WorkflowRunStep = typeof workflowRunSteps.$inferSelect;
 export type NewWorkflowRunStep = typeof workflowRunSteps.$inferInsert;
 export type GitHubInstallation = typeof githubInstallations.$inferSelect;
 export type NewGitHubInstallation = typeof githubInstallations.$inferInsert;
+export type ModelProvider = typeof modelProviders.$inferSelect;
+export type NewModelProvider = typeof modelProviders.$inferInsert;
 
 // Linked accounts for external platforms (Slack, Discord, etc.)
 export const linkedAccounts = pgTable(

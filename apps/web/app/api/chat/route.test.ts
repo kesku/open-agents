@@ -178,6 +178,10 @@ mock.module("@/lib/db/user-preferences", () => ({
   getUserPreferences: async () => preferencesState,
 }));
 
+mock.module("@/lib/db/model-providers", () => ({
+  getModelProviderRuntimeConfigs: async () => [],
+}));
+
 mock.module("@/lib/skills-cache", () => ({
   getCachedSkills: async () => cachedSkillsState,
   setCachedSkills: async () => {},

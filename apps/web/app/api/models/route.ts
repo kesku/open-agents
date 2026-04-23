@@ -1,10 +1,18 @@
 import { fetchAvailableLanguageModelsWithContext } from "@/lib/models-with-context";
+import { getServerSession } from "@/lib/session/get-server-session";
 
-const CACHE_CONTROL = "public, s-maxage=3600, stale-while-revalidate=86400";
+const CACHE_CONTROL = "private, no-store";
 
 export async function GET() {
   try {
-    const models = await fetchAvailableLanguageModelsWithContext();
+    const session = await getServerSession();
+    if (!session?.user?.id) {
+      return Response.json({ error: "Not authenticated" }, { status: 401 });
+    }
+
+    const models = await fetchAvailableLanguageModelsWithContext(
+      session.user.id,
+    );
 
     return Response.json(
       { models },

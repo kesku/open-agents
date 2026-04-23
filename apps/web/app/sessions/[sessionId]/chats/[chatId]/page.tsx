@@ -36,9 +36,9 @@ function isOptimisticChatId(chatId: string): boolean {
 const OPTIMISTIC_CHAT_RETRY_DELAY_MS = 100;
 const OPTIMISTIC_CHAT_RETRY_ATTEMPTS = 50;
 
-async function getInitialModels() {
+async function getInitialModels(userId: string) {
   try {
-    return await fetchAvailableLanguageModelsWithContext();
+    return await fetchAvailableLanguageModelsWithContext(userId);
   } catch {
     return [];
   }
@@ -106,7 +106,7 @@ export default async function SessionChatPage({
     await Promise.all([
       getChatByIdWithRetry(chatId, sessionId),
       getChatMessages(chatId),
-      getInitialModels(),
+      getInitialModels(session.user.id),
       getUserPreferences(session.user.id),
       getChatSummariesBySessionId(sessionId, session.user.id),
     ]);

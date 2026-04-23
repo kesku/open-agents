@@ -2,14 +2,24 @@ import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
 mock.module("server-only", () => ({}));
 
+let customProviders: Array<{
+  id: string;
+  name: string;
+  baseURL: string;
+  apiKey: string;
+}> = [];
+
+mock.module("@/lib/db/model-providers", () => ({
+  getModelProviderRuntimeConfigs: async () => customProviders,
+}));
+
 const originalFetch = globalThis.fetch;
 const originalOpenAiApiKey = process.env.OPENAI_API_KEY;
 const originalOpenAiBaseUrl = process.env.OPENAI_BASE_URL;
 const originalPublicOpenAiBaseUrl = process.env.NEXT_PUBLIC_OPENAI_BASE_URL;
-const originalPerplexityApiKey = process.env.PERPLEXITY_API_KEY;
-const originalPerplexityBaseUrl = process.env.PERPLEXITY_BASE_URL;
 
 let openAiModelsApiData: unknown = {};
+let customProviderModelsApiData: unknown = {};
 const requestedUrls: string[] = [];
 
 const {
@@ -31,15 +41,27 @@ describe("model catalog", () => {
   beforeEach(() => {
     requestedUrls.length = 0;
     openAiModelsApiData = {};
+    customProviderModelsApiData = {};
+    customProviders = [];
     clearModelCatalogCacheForTests();
     delete process.env.OPENAI_BASE_URL;
     delete process.env.NEXT_PUBLIC_OPENAI_BASE_URL;
-    delete process.env.PERPLEXITY_BASE_URL;
 
     globalThis.fetch = mock((input: RequestInfo | URL) => {
-      requestedUrls.push(getRequestUrl(input));
+      const requestUrl = getRequestUrl(input);
+      requestedUrls.push(requestUrl);
+
+      if (requestUrl === "https://api.openai.com/v1/models") {
+        return Promise.resolve(
+          new Response(JSON.stringify(openAiModelsApiData), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        );
+      }
+
       return Promise.resolve(
-        new Response(JSON.stringify(openAiModelsApiData), {
+        new Response(JSON.stringify(customProviderModelsApiData), {
           status: 200,
           headers: { "Content-Type": "application/json" },
         }),
@@ -68,23 +90,10 @@ describe("model catalog", () => {
     } else {
       process.env.NEXT_PUBLIC_OPENAI_BASE_URL = originalPublicOpenAiBaseUrl;
     }
-
-    if (originalPerplexityApiKey === undefined) {
-      delete process.env.PERPLEXITY_API_KEY;
-    } else {
-      process.env.PERPLEXITY_API_KEY = originalPerplexityApiKey;
-    }
-
-    if (originalPerplexityBaseUrl === undefined) {
-      delete process.env.PERPLEXITY_BASE_URL;
-    } else {
-      process.env.PERPLEXITY_BASE_URL = originalPerplexityBaseUrl;
-    }
   });
 
   test("filters OpenAI /v1/models down to usable chat and responses models", async () => {
     process.env.OPENAI_API_KEY = "test-openai-key";
-    delete process.env.PERPLEXITY_API_KEY;
     openAiModelsApiData = {
       data: [
         { id: "gpt-5.4" },
@@ -110,18 +119,30 @@ describe("model catalog", () => {
     expect(requestedUrls).toEqual(["https://api.openai.com/v1/models"]);
   });
 
-  test("surfaces Perplexity catalog entries without reintroducing direct Anthropic models", async () => {
+  test("discovers models from custom OpenAI-compatible providers", async () => {
     delete process.env.OPENAI_API_KEY;
-    process.env.PERPLEXITY_API_KEY = "test-perplexity-key";
+    customProviders = [
+      {
+        id: "openrouter",
+        name: "OpenRouter",
+        baseURL: "https://openrouter.ai/api/v1",
+        apiKey: "or-key",
+      },
+    ];
+    customProviderModelsApiData = {
+      data: [
+        { id: "google/gemini-2.5-pro" },
+        { id: "openai/gpt-5.1" },
+        { id: "text-embedding-3-small" },
+      ],
+    };
 
-    const models = await getAvailableLanguageModelsFromCatalog();
+    const models = await getAvailableLanguageModelsFromCatalog("user-1");
     const modelIds = models.map((model) => model.id);
 
-    expect(modelIds).toContain("perplexity/sonar");
-    expect(modelIds).toContain("perplexity/openai/gpt-5.4");
-    expect(modelIds).toContain("perplexity/anthropic/claude-opus-4-6");
-    expect(modelIds).toContain("perplexity/google/gemini-3.1-pro-preview");
-    expect(modelIds).not.toContain("anthropic/claude-opus-4.6");
-    expect(requestedUrls).toHaveLength(0);
+    expect(modelIds).toContain("openrouter/google/gemini-2.5-pro");
+    expect(modelIds).toContain("openrouter/openai/gpt-5.1");
+    expect(modelIds).not.toContain("openrouter/text-embedding-3-small");
+    expect(requestedUrls).toEqual(["https://openrouter.ai/api/v1/models"]);
   });
 });

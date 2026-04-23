@@ -1,6 +1,7 @@
 export {
   type GatewayConfig,
   type GatewayOptions,
+  type OpenAICompatibleProviderConfig,
   gateway,
   getConfiguredProviderIds,
 } from "./models";

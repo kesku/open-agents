@@ -5,6 +5,7 @@ import { addCacheControl } from "./context-management";
 import {
   type GatewayModelId,
   gateway,
+  type OpenAICompatibleProviderConfig,
   type ProviderOptionsByProvider,
 } from "./models";
 
@@ -44,6 +45,9 @@ const callOptionsSchema = z.object({
   sandbox: z.custom<AgentSandboxContext>(),
   model: z.custom<OpenHarnessAgentModelInput>().optional(),
   subagentModel: z.custom<OpenHarnessAgentModelInput>().optional(),
+  openAICompatibleProviders: z
+    .custom<OpenAICompatibleProviderConfig[]>()
+    .optional(),
   customInstructions: z.string().optional(),
   skills: z.custom<SkillMetadata[]>().optional(),
 });
@@ -107,10 +111,12 @@ export const openHarnessAgent = new ToolLoopAgent({
 
     const callModel = gateway(mainSelection.id, {
       providerOptionsOverrides: mainSelection.providerOptionsOverrides,
+      openAICompatibleProviders: options.openAICompatibleProviders,
     });
     const subagentModel = subagentSelection
       ? gateway(subagentSelection.id, {
           providerOptionsOverrides: subagentSelection.providerOptionsOverrides,
+          openAICompatibleProviders: options.openAICompatibleProviders,
         })
       : undefined;
     const customInstructions = options.customInstructions;

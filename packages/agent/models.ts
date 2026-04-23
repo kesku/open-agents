@@ -1,7 +1,3 @@
-import {
-  createAnthropic,
-  type AnthropicLanguageModelOptions,
-} from "@ai-sdk/anthropic";
 import { devToolsMiddleware } from "@ai-sdk/devtools";
 import {
   createOpenAI,
@@ -16,25 +12,9 @@ import {
 } from "ai";
 
 const defaultOpenAIProvider = createOpenAI();
-const defaultAnthropicProvider = createAnthropic();
-const DEFAULT_PERPLEXITY_BASE_URL = "https://api.perplexity.ai/v1";
-
 // Kept as a compatibility alias for existing call sites. Model ids are now
 // resolved directly through the provider registry instead of AI Gateway.
 export type GatewayModelId = string;
-
-function getAnthropicSettings(modelId: string): AnthropicLanguageModelOptions {
-  if (modelId.includes("4.6")) {
-    return {
-      effort: "medium",
-      thinking: { type: "adaptive" },
-    } satisfies AnthropicLanguageModelOptions;
-  }
-
-  return {
-    thinking: { type: "enabled", budgetTokens: 8000 },
-  };
-}
 
 function isJsonObject(value: unknown): value is Record<string, JSONValue> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -100,10 +80,18 @@ export interface GatewayConfig {
   apiKey: string;
 }
 
+export interface OpenAICompatibleProviderConfig {
+  id: string;
+  name: string;
+  baseURL: string;
+  apiKey: string;
+}
+
 export interface GatewayOptions {
   devtools?: boolean;
   config?: GatewayConfig;
   providerOptionsOverrides?: ProviderOptionsByProvider;
+  openAICompatibleProviders?: OpenAICompatibleProviderConfig[];
 }
 
 export type { LanguageModel, JSONValue };
@@ -121,20 +109,15 @@ export function getProviderOptionsForModel(
   providerOptionsOverrides?: ProviderOptionsByProvider,
 ): ProviderOptionsByProvider {
   const defaultProviderOptions: ProviderOptionsByProvider = {};
+  const { providerId } = splitModelId(modelId);
 
-  if (modelId.startsWith("anthropic/")) {
-    defaultProviderOptions.anthropic = toProviderOptionsRecord(
-      getAnthropicSettings(modelId),
-    );
-  }
-
-  if (modelId.startsWith("openai/")) {
+  if (providerId === "openai") {
     defaultProviderOptions.openai = toProviderOptionsRecord({
       store: false,
     } satisfies OpenAIResponsesProviderOptions);
   }
 
-  if (shouldApplyOpenAIReasoningDefaults(modelId)) {
+  if (providerId === "openai" && shouldApplyOpenAIReasoningDefaults(modelId)) {
     defaultProviderOptions.openai = mergeRecords(
       defaultProviderOptions.openai ?? {},
       toProviderOptionsRecord({
@@ -144,7 +127,10 @@ export function getProviderOptionsForModel(
     );
   }
 
-  if (shouldApplyOpenAITextVerbosityDefaults(modelId)) {
+  if (
+    providerId === "openai" &&
+    shouldApplyOpenAITextVerbosityDefaults(modelId)
+  ) {
     defaultProviderOptions.openai = mergeRecords(
       defaultProviderOptions.openai ?? {},
       toProviderOptionsRecord({
@@ -158,7 +144,7 @@ export function getProviderOptionsForModel(
     providerOptionsOverrides,
   );
 
-  if (modelId.startsWith("openai/")) {
+  if (providerId === "openai") {
     providerOptions.openai = mergeRecords(
       providerOptions.openai ?? {},
       toProviderOptionsRecord({
@@ -175,41 +161,18 @@ function hasEnv(name: string): boolean {
   return typeof value === "string" && value.trim().length > 0;
 }
 
-function getRequiredPerplexityApiKey(): string {
-  const apiKey = process.env.PERPLEXITY_API_KEY?.trim();
-  if (!apiKey) {
-    throw new Error(
-      "PERPLEXITY_API_KEY is required to use the Perplexity model provider.",
-    );
-  }
-
-  return apiKey;
-}
-
 export function getConfiguredProviderIds(): string[] {
-  const configuredProviders: string[] = [];
+  const configuredProviders = new Set<string>();
 
   if (
     hasEnv("OPENAI_API_KEY") ||
     hasEnv("OPENAI_BASE_URL") ||
     hasEnv("NEXT_PUBLIC_OPENAI_BASE_URL")
   ) {
-    configuredProviders.push("openai");
+    configuredProviders.add("openai");
   }
 
-  if (
-    hasEnv("ANTHROPIC_API_KEY") ||
-    hasEnv("ANTHROPIC_AUTH_TOKEN") ||
-    hasEnv("ANTHROPIC_BASE_URL")
-  ) {
-    configuredProviders.push("anthropic");
-  }
-
-  if (hasEnv("PERPLEXITY_API_KEY")) {
-    configuredProviders.push("perplexity");
-  }
-
-  return configuredProviders;
+  return [...configuredProviders];
 }
 
 function splitModelId(modelId: string): {
@@ -229,10 +192,18 @@ function splitModelId(modelId: string): {
   };
 }
 
+function getCustomProviderConfig(
+  providerId: string,
+  providers: OpenAICompatibleProviderConfig[],
+): OpenAICompatibleProviderConfig | undefined {
+  return providers.find((provider) => provider.id === providerId);
+}
+
 function createProviderModel(
   providerId: string,
   providerModelId: string,
   config?: GatewayConfig,
+  openAICompatibleProviders: OpenAICompatibleProviderConfig[] = [],
 ): LanguageModelV3 {
   if (providerId === "openai") {
     const provider = config
@@ -245,27 +216,15 @@ function createProviderModel(
     return provider(providerModelId);
   }
 
-  if (providerId === "anthropic") {
-    const provider = config
-      ? createAnthropic({
-          apiKey: config.apiKey,
-          baseURL: config.baseURL,
-        })
-      : defaultAnthropicProvider;
-
-    return provider(providerModelId);
-  }
-
-  if (providerId === "perplexity") {
+  const customProvider = getCustomProviderConfig(
+    providerId,
+    openAICompatibleProviders,
+  );
+  if (customProvider) {
     const provider = createOpenAI({
-      apiKey: config?.apiKey ?? getRequiredPerplexityApiKey(),
-      baseURL:
-        config?.baseURL ??
-        process.env.PERPLEXITY_BASE_URL ??
-        DEFAULT_PERPLEXITY_BASE_URL,
-      name: "perplexity",
+      apiKey: customProvider.apiKey,
+      baseURL: customProvider.baseURL,
     });
-
     return provider(providerModelId);
   }
 
@@ -276,13 +235,19 @@ export function gateway(
   modelId: GatewayModelId,
   options: GatewayOptions = {},
 ): LanguageModelV3 {
-  const { devtools = false, config, providerOptionsOverrides } = options;
+  const {
+    devtools = false,
+    config,
+    providerOptionsOverrides,
+    openAICompatibleProviders = [],
+  } = options;
   const { providerId, providerModelId } = splitModelId(modelId);
 
   let model: LanguageModelV3 = createProviderModel(
     providerId,
     providerModelId,
     config,
+    openAICompatibleProviders,
   );
 
   const providerOptions = getProviderOptionsForModel(

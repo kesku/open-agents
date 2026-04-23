@@ -150,10 +150,11 @@ function addModelsDevMetadata(
   model: AvailableModel,
   metadataMap: Map<string, ModelsDevMetadata>,
 ): AvailableModel {
+  const providerPrefix = `${model.provider}/`;
   const metadata =
     metadataMap.get(model.id) ??
-    (model.provider === "perplexity"
-      ? metadataMap.get(model.id.slice("perplexity/".length))
+    (model.id.startsWith(providerPrefix)
+      ? metadataMap.get(model.id.slice(providerPrefix.length))
       : undefined);
   if (!metadata) {
     return model;
@@ -175,17 +176,17 @@ function addModelsDevMetadata(
   return nextModel;
 }
 
-export async function fetchAvailableLanguageModels(): Promise<
-  AvailableModel[]
-> {
-  return getAvailableLanguageModelsFromCatalog();
+export async function fetchAvailableLanguageModels(
+  userId?: string,
+): Promise<AvailableModel[]> {
+  return getAvailableLanguageModelsFromCatalog(userId);
 }
 
-export async function fetchAvailableLanguageModelsWithContext(): Promise<
-  AvailableModel[]
-> {
+export async function fetchAvailableLanguageModelsWithContext(
+  userId?: string,
+): Promise<AvailableModel[]> {
   const [models, modelsDevMetadataMap] = await Promise.all([
-    fetchAvailableLanguageModels(),
+    fetchAvailableLanguageModels(userId),
     fetchModelsDevMetadataMap(),
   ]);
 

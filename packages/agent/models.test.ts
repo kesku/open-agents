@@ -116,8 +116,8 @@ describe("getProviderOptionsForModel", () => {
     });
   });
 
-  test("does not apply OpenAI Responses defaults to Perplexity-routed models", () => {
-    const result = getProviderOptionsForModel("perplexity/openai/gpt-5.4");
+  test("does not apply OpenAI Responses defaults to custom OpenAI-compatible providers", () => {
+    const result = getProviderOptionsForModel("openrouter/openai/gpt-5.4");
 
     expect(result).toEqual({});
   });
@@ -207,20 +207,20 @@ describe("mergeProviderOptions", () => {
 });
 
 describe("getConfiguredProviderIds", () => {
-  test("includes Perplexity only when a Perplexity key is configured", () => {
-    const originalPerplexityApiKey = process.env.PERPLEXITY_API_KEY;
+  test("includes OpenAI when an OpenAI key is configured", () => {
+    const originalOpenAiApiKey = process.env.OPENAI_API_KEY;
 
     try {
-      delete process.env.PERPLEXITY_API_KEY;
-      expect(getConfiguredProviderIds()).not.toContain("perplexity");
+      delete process.env.OPENAI_API_KEY;
+      expect(getConfiguredProviderIds()).not.toContain("openai");
 
-      process.env.PERPLEXITY_API_KEY = "test-perplexity-key";
-      expect(getConfiguredProviderIds()).toContain("perplexity");
+      process.env.OPENAI_API_KEY = "test-openai-key";
+      expect(getConfiguredProviderIds()).toContain("openai");
     } finally {
-      if (originalPerplexityApiKey === undefined) {
-        delete process.env.PERPLEXITY_API_KEY;
+      if (originalOpenAiApiKey === undefined) {
+        delete process.env.OPENAI_API_KEY;
       } else {
-        process.env.PERPLEXITY_API_KEY = originalPerplexityApiKey;
+        process.env.OPENAI_API_KEY = originalOpenAiApiKey;
       }
     }
   });

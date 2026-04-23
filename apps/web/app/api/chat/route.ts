@@ -126,10 +126,10 @@ export async function POST(req: Request) {
     return null;
   });
 
-  const [{ sandbox, skills, githubToken }, preferences] = await Promise.all([
-    runtimePromise,
-    preferencesPromise,
-  ]);
+  const [
+    { sandbox, skills, githubToken, openAICompatibleProviders },
+    preferences,
+  ] = await Promise.all([runtimePromise, preferencesPromise]);
 
   const modelVariants = getAllVariants(preferences?.modelVariants ?? []);
   const selectedModelId = chat.modelId ?? null;
@@ -178,6 +178,9 @@ export async function POST(req: Request) {
           ? { subagentModel: subagentModelSelection }
           : {}),
         ...(skills.length > 0 && { skills }),
+        ...(openAICompatibleProviders.length > 0
+          ? { openAICompatibleProviders }
+          : {}),
         customInstructions: assistantFileLinkPrompt,
       },
       ...(shouldAutoCommitPush &&

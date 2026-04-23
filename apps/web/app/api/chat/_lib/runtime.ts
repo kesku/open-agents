@@ -1,5 +1,6 @@
 import { discoverSkills } from "@open-harness/agent";
 import { connectSandbox } from "@open-harness/sandbox";
+import { getModelProviderRuntimeConfigs } from "@/lib/db/model-providers";
 import { getUserGitHubToken } from "@/lib/github/user-token";
 import { getSandboxCapabilities } from "@/lib/sandbox/backend";
 import { DEFAULT_SANDBOX_PORTS } from "@/lib/sandbox/config";
@@ -43,6 +44,9 @@ export async function createChatRuntime(params: {
   sandbox: ConnectedSandbox;
   skills: DiscoveredSkills;
   githubToken?: string;
+  openAICompatibleProviders: Awaited<
+    ReturnType<typeof getModelProviderRuntimeConfigs>
+  >;
 }> {
   const { userId, sessionId, sessionRecord } = params;
 
@@ -51,18 +55,20 @@ export async function createChatRuntime(params: {
     throw new Error("Sandbox state is required to create chat runtime");
   }
 
-  const [githubToken, vercelCliSetup] = await Promise.all([
-    getUserGitHubToken(userId),
-    getSandboxCapabilities(sandboxState).supportsSnapshots
-      ? getVercelCliSandboxSetup({ userId, sessionRecord }).catch((error) => {
-          console.warn(
-            `Failed to prepare Vercel CLI setup for session ${sessionId}:`,
-            error,
-          );
-          return null;
-        })
-      : Promise.resolve(null),
-  ]);
+  const [githubToken, vercelCliSetup, openAICompatibleProviders] =
+    await Promise.all([
+      getUserGitHubToken(userId),
+      getSandboxCapabilities(sandboxState).supportsSnapshots
+        ? getVercelCliSandboxSetup({ userId, sessionRecord }).catch((error) => {
+            console.warn(
+              `Failed to prepare Vercel CLI setup for session ${sessionId}:`,
+              error,
+            );
+            return null;
+          })
+        : Promise.resolve(null),
+      getModelProviderRuntimeConfigs(userId),
+    ]);
 
   const sandbox = await connectSandbox(sandboxState, {
     githubToken: githubToken ?? undefined,
@@ -86,5 +92,6 @@ export async function createChatRuntime(params: {
     sandbox,
     skills,
     githubToken: githubToken ?? undefined,
+    openAICompatibleProviders,
   };
 }

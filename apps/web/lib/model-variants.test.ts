@@ -35,9 +35,13 @@ describe("model variants", () => {
     });
   });
 
-  test("toProviderOptionsByProvider returns undefined for non-OpenAI variants with no provider options", () => {
+  test("toProviderOptionsByProvider treats OpenAI-compatible providers as OpenAI-shaped", () => {
     const result = toProviderOptionsByProvider("anthropic/claude-opus-4.6", {});
-    expect(result).toBeUndefined();
+    expect(result).toEqual({
+      openai: {
+        store: false,
+      },
+    });
   });
 
   test("toProviderOptionsByProvider forces store false for OpenAI variants", () => {
@@ -54,8 +58,8 @@ describe("model variants", () => {
     });
   });
 
-  test("toProviderOptionsByProvider uses OpenAI provider options for Perplexity-backed models", () => {
-    const result = toProviderOptionsByProvider("perplexity/openai/gpt-5.4", {
+  test("toProviderOptionsByProvider uses OpenAI provider options for custom OpenAI-compatible providers", () => {
+    const result = toProviderOptionsByProvider("openrouter/openai/gpt-5.4", {
       reasoningEffort: "medium",
     });
 

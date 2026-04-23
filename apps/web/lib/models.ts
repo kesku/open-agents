@@ -2,7 +2,7 @@ export { DEFAULT_FAST_MODEL_ID, DEFAULT_MODEL_ID } from "./model-defaults";
 export const DEFAULT_CONTEXT_LIMIT = 200_000;
 const TOKENS_PER_MILLION = 1_000_000;
 
-export type AvailableModelProvider = "openai" | "anthropic" | "perplexity";
+export type AvailableModelProvider = string;
 
 export interface AvailableModelCostTier {
   input?: number;

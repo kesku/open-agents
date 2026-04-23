@@ -54,9 +54,9 @@ const sessions: readonly FakeSession[] = [
     title: "Model catalog",
     repo: "open-agents",
     branch: "feat/dynamic-models",
-    prompt: "Fetch OpenAI models dynamically and add Perplexity routing",
+    prompt: "Fetch OpenAI models dynamically and add custom provider routing",
     summary:
-      "Added a cached OpenAI model catalog, surfaced Perplexity-compatible models, and kept the selector synced with the live provider list.",
+      "Added a cached OpenAI model catalog, surfaced OpenAI-compatible provider models, and kept the selector synced with the live provider list.",
     toolCount: 10,
     todoTotal: 3,
     todoDone: 3,
