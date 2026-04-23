@@ -6,6 +6,7 @@ import type { AutoCreatePrResult } from "@/lib/chat/auto-pr-direct";
 import { dedupeMessageReasoning } from "@/lib/chat/dedupe-message-reasoning";
 import { getChatTitlePreview } from "@/lib/chat-title";
 import {
+  claimChatActiveStreamId,
   compareAndSetChatActiveStreamId,
   createChatMessageIfNotExists,
   isFirstChatMessage,
@@ -219,6 +220,52 @@ export async function clearActiveStream(
       await delay(ACTIVE_STREAM_CLEAR_RETRY_DELAY_MS);
     }
   }
+}
+
+const ACTIVE_STREAM_CLAIM_MAX_ATTEMPTS = 3;
+const ACTIVE_STREAM_CLAIM_RETRY_DELAY_MS = 50;
+
+export type ClaimActiveStreamResult = "claimed" | "conflict" | "error";
+
+/**
+ * First-step self-registration of the workflow's runId onto the chat.
+ *
+ * The HTTP handler also claims this after `start()` returns, but that write can
+ * be lost if the request tears down early. Claiming from inside the workflow
+ * ties resumability to the workflow's own lifetime.
+ */
+export async function claimActiveStream(
+  chatId: string,
+  workflowRunId: string,
+): Promise<ClaimActiveStreamResult> {
+  "use step";
+
+  for (
+    let attempt = 1;
+    attempt <= ACTIVE_STREAM_CLAIM_MAX_ATTEMPTS;
+    attempt++
+  ) {
+    try {
+      const ok = await claimChatActiveStreamId(chatId, workflowRunId);
+      if (!ok) {
+        console.warn(
+          "[workflow] activeStreamId slot owned by a different run:",
+          { chatId, workflowRunId },
+        );
+        return "conflict";
+      }
+      return "claimed";
+    } catch (error) {
+      if (attempt === ACTIVE_STREAM_CLAIM_MAX_ATTEMPTS) {
+        console.error("[workflow] Failed to claim activeStreamId:", error);
+        return "error";
+      }
+
+      await delay(ACTIVE_STREAM_CLAIM_RETRY_DELAY_MS);
+    }
+  }
+
+  return "error";
 }
 
 function delay(ms: number) {

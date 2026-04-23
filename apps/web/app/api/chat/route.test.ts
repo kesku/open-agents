@@ -38,6 +38,7 @@ let existingChatMessage: { id: string } | null = null;
 let isSandboxActive = true;
 let existingRunStatus: string = "completed";
 let getRunShouldThrow = false;
+let claimActiveStreamDefaultResult = true;
 let compareAndSetDefaultResult = true;
 let compareAndSetResults: boolean[] = [];
 let startCalls: unknown[][] = [];
@@ -49,6 +50,10 @@ let preferencesState = {
 let cachedSkillsState: unknown = null;
 let discoverSkillDirsCalls: string[][] = [];
 let githubTokenResult: string | null = null;
+
+const claimChatActiveStreamIdSpy = mock(
+  async () => claimActiveStreamDefaultResult,
+);
 
 const compareAndSetChatActiveStreamIdSpy = mock(async () => {
   const nextResult = compareAndSetResults.shift();
@@ -152,6 +157,7 @@ mock.module("./_lib/persist-tool-results", () => ({
 }));
 
 mock.module("@/lib/db/sessions", () => ({
+  claimChatActiveStreamId: claimChatActiveStreamIdSpy,
   compareAndSetChatActiveStreamId: compareAndSetChatActiveStreamIdSpy,
   countUserMessagesByUserId: async () => existingUserMessageCount,
   createChatMessageIfNotExists: async () => undefined,
@@ -243,6 +249,7 @@ describe("/api/chat route", () => {
     isSandboxActive = true;
     existingRunStatus = "completed";
     getRunShouldThrow = false;
+    claimActiveStreamDefaultResult = true;
     compareAndSetDefaultResult = true;
     compareAndSetResults = [];
     startCalls = [];
@@ -256,6 +263,7 @@ describe("/api/chat route", () => {
       modelVariants: [],
     };
     githubTokenResult = null;
+    claimChatActiveStreamIdSpy.mockClear();
     compareAndSetChatActiveStreamIdSpy.mockClear();
     persistAssistantMessagesWithToolResultsSpy.mockClear();
     currentAuthSession = {
@@ -532,10 +540,11 @@ describe("/api/chat route", () => {
 
     const compareAndSetCalls = compareAndSetChatActiveStreamIdSpy.mock
       .calls as unknown[][];
-    expect(compareAndSetCalls).toEqual([
-      ["chat-1", "wrun_old-789", null],
-      ["chat-1", null, "wrun_test-123"],
-    ]);
+    expect(compareAndSetCalls).toEqual([["chat-1", "wrun_old-789", null]]);
+    expect(claimChatActiveStreamIdSpy).toHaveBeenCalledWith(
+      "chat-1",
+      "wrun_test-123",
+    );
   });
 
   test("starts new workflow when the existing run cannot be loaded and clears the stale stream id first", async () => {
@@ -552,14 +561,28 @@ describe("/api/chat route", () => {
 
     const compareAndSetCalls = compareAndSetChatActiveStreamIdSpy.mock
       .calls as unknown[][];
-    expect(compareAndSetCalls).toEqual([
-      ["chat-1", "wrun_missing-789", null],
-      ["chat-1", null, "wrun_test-123"],
-    ]);
+    expect(compareAndSetCalls).toEqual([["chat-1", "wrun_missing-789", null]]);
+    expect(claimChatActiveStreamIdSpy).toHaveBeenCalledWith(
+      "chat-1",
+      "wrun_test-123",
+    );
   });
 
-  test("returns 409 when CAS race is lost", async () => {
+  test("succeeds when the started workflow already claimed the stream slot", async () => {
     compareAndSetDefaultResult = false;
+    const { POST } = await routeModulePromise;
+
+    const response = await POST(createValidRequest());
+
+    expect(response.ok).toBe(true);
+    expect(claimChatActiveStreamIdSpy).toHaveBeenCalledWith(
+      "chat-1",
+      "wrun_test-123",
+    );
+  });
+
+  test("returns 409 when a different workflow owns the stream slot", async () => {
+    claimActiveStreamDefaultResult = false;
     const { POST } = await routeModulePromise;
 
     const response = await POST(createValidRequest());

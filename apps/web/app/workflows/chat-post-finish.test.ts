@@ -14,6 +14,7 @@ const sandboxExec = mock(() =>
 );
 
 const spies = {
+  claimChatActiveStreamId: mock(() => Promise.resolve(true)),
   compareAndSetChatActiveStreamId: mock(() => Promise.resolve(true)),
   createChatMessageIfNotExists: mock(
     () =>
@@ -55,6 +56,7 @@ const spies = {
 // ── Module mocks (must appear before the module-under-test import) ──
 
 mock.module("@/lib/db/sessions", () => ({
+  claimChatActiveStreamId: spies.claimChatActiveStreamId,
   compareAndSetChatActiveStreamId: spies.compareAndSetChatActiveStreamId,
   createChatMessageIfNotExists: spies.createChatMessageIfNotExists,
   isFirstChatMessage: spies.isFirstChatMessage,
@@ -95,6 +97,7 @@ const {
   persistAssistantMessage,
   refreshLifecycleActivity,
   persistSandboxState,
+  claimActiveStream,
   clearActiveStream,
   refreshDiffCache,
   hasAutoCommitChangesStep,
@@ -298,6 +301,28 @@ describe("persistSandboxState", () => {
 });
 
 // ─── clearActiveStream ─────────────────────────────────────────────
+
+describe("claimActiveStream", () => {
+  test("claims the active stream slot", async () => {
+    await expect(claimActiveStream("chat-1", "wrun_abc")).resolves.toBe(
+      "claimed",
+    );
+    expect(spies.claimChatActiveStreamId).toHaveBeenCalledWith(
+      "chat-1",
+      "wrun_abc",
+    );
+  });
+
+  test("returns conflict when another run owns the slot", async () => {
+    spies.claimChatActiveStreamId.mockImplementationOnce(() =>
+      Promise.resolve(false),
+    );
+
+    await expect(claimActiveStream("chat-1", "wrun_abc")).resolves.toBe(
+      "conflict",
+    );
+  });
+});
 
 describe("clearActiveStream", () => {
   test("calls compareAndSet with correct args", async () => {

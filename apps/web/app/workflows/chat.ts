@@ -20,6 +20,7 @@ import type {
   WebAgentUIMessage,
 } from "@/app/types";
 import {
+  claimActiveStream,
   clearActiveStream,
   hasAutoCommitChangesStep,
   persistAssistantMessage,
@@ -458,6 +459,15 @@ export async function runAgentWorkflow(options: Options) {
 
   if (latestMessage == null) {
     throw new Error("runAgentWorkflow requires at least one message");
+  }
+
+  const activeStreamClaim = await claimActiveStream(
+    options.chatId,
+    workflowRunId,
+  );
+  if (activeStreamClaim === "conflict") {
+    await closeStream(writable);
+    return;
   }
 
   const [modelMessages, assistantId] = await Promise.all([

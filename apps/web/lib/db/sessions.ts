@@ -655,6 +655,34 @@ export async function compareAndSetChatActiveStreamId(
   return Boolean(updated);
 }
 
+/**
+ * Idempotently claims the activeStreamId slot for the given workflow run.
+ *
+ * Returns true when the slot is now owned by `workflowRunId`, meaning it was
+ * either empty or already set to this same workflow. Returns false when another
+ * workflow owns the slot.
+ */
+export async function claimChatActiveStreamId(
+  chatId: string,
+  workflowRunId: string,
+): Promise<boolean> {
+  const [updated] = await db
+    .update(chats)
+    .set({ activeStreamId: workflowRunId })
+    .where(
+      and(
+        eq(chats.id, chatId),
+        or(
+          isNull(chats.activeStreamId),
+          eq(chats.activeStreamId, workflowRunId),
+        ),
+      ),
+    )
+    .returning({ id: chats.id });
+
+  return Boolean(updated);
+}
+
 export async function deleteChat(chatId: string) {
   await db.delete(chats).where(eq(chats.id, chatId));
 }

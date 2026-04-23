@@ -5,6 +5,7 @@ import { assistantFileLinkPrompt } from "@/lib/assistant-file-links";
 import { createCancelableReadableStream } from "@/lib/chat/create-cancelable-readable-stream";
 import { getChatTitlePreview } from "@/lib/chat-title";
 import {
+  claimChatActiveStreamId,
   compareAndSetChatActiveStreamId,
   createChatMessageIfNotExists,
   getChatById,
@@ -191,16 +192,12 @@ export async function POST(req: Request) {
     },
   ]);
 
-  // Atomically claim the activeStreamId slot. If another request raced us and
-  // already set it, cancel the workflow we just started and reconnect instead.
-  const claimed = await compareAndSetChatActiveStreamId(
-    chatId,
-    null,
-    run.runId,
-  );
+  // Idempotently claim the activeStreamId slot for the workflow we just
+  // started. This also succeeds when the workflow self-claimed first.
+  const claimed = await claimChatActiveStreamId(chatId, run.runId);
 
   if (!claimed) {
-    // Another request won the race — cancel our duplicate workflow.
+    // Another request or workflow run owns the slot — cancel our duplicate.
     try {
       const { getRun } = await import("workflow/api");
       getRun(run.runId).cancel();
