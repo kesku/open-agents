@@ -36,7 +36,7 @@ const themeInitializationScript = `
 `;
 
 const faviconPath = "/favicon.ico";
-const metadataBase = new URL("http://openagents.local");
+const metadataBase = new URL("http://openagents.kesku.me");
 
 export const metadata: Metadata = {
   metadataBase,

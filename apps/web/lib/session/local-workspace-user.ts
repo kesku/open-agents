@@ -3,7 +3,7 @@ import type { Session } from "./types";
 export const LOCAL_WORKSPACE_USER: Session["user"] = {
   id: "kesku",
   username: "kesku",
-  email: "kesku@openagents.local",
+  email: "kesku@openagents.kesku.me",
   name: "Kesku",
   avatar: "https://avatars.githubusercontent.com/u/62210496",
 };
