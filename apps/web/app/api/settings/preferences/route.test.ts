@@ -9,6 +9,7 @@ const preferencesState = {
   defaultSubagentModelId: null as string | null,
   defaultSandboxType: "vercel" as const,
   defaultDiffMode: "unified" as const,
+  defaultBranchNameTemplate: "",
   autoCommitPush: false,
   autoCreatePr: false,
   alertsEnabled: true,
@@ -78,6 +79,7 @@ describe("/api/settings/preferences", () => {
     expect(body.preferences.autoCommitPush).toBe(false);
     expect(body.preferences.autoCreatePr).toBe(false);
     expect(body.preferences.defaultSandboxType).toBe("vercel");
+    expect(body.preferences.defaultBranchNameTemplate).toBe("");
     expect(body.preferences.globalSkillRefs).toEqual([]);
   });
 
@@ -150,6 +152,39 @@ describe("/api/settings/preferences", () => {
     expect(updateCalls).toHaveLength(1);
     expect(updateCalls[0]).toEqual({ autoCreatePr: true });
     expect(body.preferences.autoCreatePr).toBe(true);
+  });
+
+  test("PATCH updates defaultBranchNameTemplate when string is provided", async () => {
+    const { PATCH } = await routeModulePromise;
+
+    const response = await PATCH(
+      createJsonRequest("PATCH", {
+        defaultBranchNameTemplate: " kesku/[worktree] ",
+      }),
+    );
+    const body = (await response.json()) as {
+      preferences: typeof preferencesState;
+    };
+
+    expect(response.status).toBe(200);
+    expect(updateCalls).toHaveLength(1);
+    expect(updateCalls[0]).toEqual({
+      defaultBranchNameTemplate: "kesku/[worktree]",
+    });
+    expect(body.preferences.defaultBranchNameTemplate).toBe("kesku/[worktree]");
+  });
+
+  test("PATCH rejects invalid defaultBranchNameTemplate values", async () => {
+    const { PATCH } = await routeModulePromise;
+
+    const response = await PATCH(
+      createJsonRequest("PATCH", { defaultBranchNameTemplate: 123 }),
+    );
+    const body = (await response.json()) as { error: string };
+
+    expect(response.status).toBe(400);
+    expect(body.error).toBe("Invalid defaultBranchNameTemplate value");
+    expect(updateCalls).toHaveLength(0);
   });
 
   test("PATCH rejects invalid publicUsageEnabled values", async () => {

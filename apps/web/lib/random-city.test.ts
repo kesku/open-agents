@@ -1,69 +1,64 @@
 import { describe, expect, test } from "bun:test";
-import { getRandomCityName } from "./random-city";
+import { getRandomAnimeName, getRandomCityName } from "./random-city";
 
-describe("getRandomCityName", () => {
+describe("getRandomAnimeName", () => {
   test("returns a non-empty string when no names are used", () => {
-    const result = getRandomCityName(new Set());
+    const result = getRandomAnimeName(new Set());
     expect(typeof result).toBe("string");
     expect(result.length).toBeGreaterThan(0);
   });
 
   test("returned name is not in the usedNames set", () => {
-    const used = new Set(["Tokyo", "Paris", "London"]);
-    const result = getRandomCityName(used);
+    const used = new Set(["naruto", "bleach", "onepiece"]);
+    const result = getRandomAnimeName(used);
     expect(used.has(result)).toBe(false);
   });
 
   test("avoids all used names when many are excluded", () => {
-    // Use all cities except one - pick the last city ("Wellington") and exclude all but it.
-    // We can't reference the private list, so instead test statistically with a large used set
-    // built by calling the function many times.
     const used = new Set<string>();
-    // Collect 50 unique results to ensure deduplication is working across calls
     for (let i = 0; i < 50; i++) {
-      const name = getRandomCityName(used);
+      const name = getRandomAnimeName(used);
       expect(used.has(name)).toBe(false);
       used.add(name);
     }
     expect(used.size).toBe(50);
   });
 
-  test("falls back to numbered suffix when all cities are exhausted", () => {
-    // Build a set containing every possible city by exhausting them all
+  test("falls back to numbered suffix when all names are exhausted", () => {
     const used = new Set<string>();
-    // The city list has ~196 entries. Drain them all.
-    for (let i = 0; i < 250; i++) {
-      const name = getRandomCityName(used);
+    for (let i = 0; i < 260; i++) {
+      const name = getRandomAnimeName(used);
       used.add(name);
     }
 
-    // After all base cities are used, subsequent picks should have a numeric suffix
-    const overflow = getRandomCityName(used);
-    // The fallback format is "<City> <number>", e.g. "Tokyo 2"
-    expect(/ \d+$/.test(overflow)).toBe(true);
+    const overflow = getRandomAnimeName(used);
+    expect(/-\d+$/.test(overflow)).toBe(true);
   });
 
   test("numbered suffix increments to avoid already-used suffixed names", () => {
-    // Exhaust base cities then force collision on suffixed names
     const used = new Set<string>();
-    for (let i = 0; i < 250; i++) {
-      used.add(getRandomCityName(used));
+    for (let i = 0; i < 260; i++) {
+      used.add(getRandomAnimeName(used));
     }
 
-    // Each successive call must return a name not already in `used`
     for (let i = 0; i < 5; i++) {
-      const overflow = getRandomCityName(used);
+      const overflow = getRandomAnimeName(used);
       expect(used.has(overflow)).toBe(false);
-      // All overflow names should carry a numeric suffix
-      expect(/ \d+$/.test(overflow)).toBe(true);
+      expect(/-\d+$/.test(overflow)).toBe(true);
       used.add(overflow);
     }
   });
 
   test("does not mutate the usedNames set", () => {
-    const used = new Set(["Tokyo", "Paris"]);
+    const used = new Set(["naruto", "bleach"]);
     const sizeBefore = used.size;
-    getRandomCityName(used);
+    getRandomAnimeName(used);
     expect(used.size).toBe(sizeBefore);
+  });
+
+  test("keeps compatibility with the old city function name", () => {
+    const result = getRandomCityName(new Set());
+    expect(typeof result).toBe("string");
+    expect(result.length).toBeGreaterThan(0);
   });
 });

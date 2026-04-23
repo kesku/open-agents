@@ -31,6 +31,7 @@ export function HomePage({ hasSessionCookie, lastRepo }: HomePageProps) {
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   const handleCreateSession = async (input: {
+    title?: string;
     repoOwner?: string;
     repoName?: string;
     branch?: string;
@@ -43,6 +44,7 @@ export function HomePage({ hasSessionCookie, lastRepo }: HomePageProps) {
     setIsCreating(true);
     try {
       const { session: createdSession, chat } = await createSession({
+        title: input.title,
         repoOwner: input.repoOwner,
         repoName: input.repoName,
         branch: input.branch,

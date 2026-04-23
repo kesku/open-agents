@@ -232,6 +232,13 @@
       "when": 1776848655619,
       "tag": "0032_drop_legacy_github_accounts",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1776916891055,
+      "tag": "0033_wild_swordsman",
+      "breakpoints": true
     }
   ]
 }

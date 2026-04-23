@@ -21,11 +21,15 @@ import {
   type SandboxType,
 } from "./sandbox-selector-compact";
 import { Switch } from "./ui/switch";
+import { Input } from "./ui/input";
+import { Label } from "./ui/label";
+import { renderBranchNameTemplate } from "@/lib/git/branch-names";
 
 type SessionMode = "empty" | "repo";
 
 interface SessionStarterProps {
   onSubmit: (session: {
+    title?: string;
     repoOwner?: string;
     repoName?: string;
     branch?: string;
@@ -52,9 +56,11 @@ export function SessionStarter({
   );
   const [selectedRepo, setSelectedRepo] = useState(() => lastRepo?.repo ?? "");
   const [selectedBranch, setSelectedBranch] = useState<string | null>(null);
+  const [sessionTitle, setSessionTitle] = useState("");
+  const [customNewBranch, setCustomNewBranch] = useState("");
   const [isNewBranch, setIsNewBranch] = useState(!!lastRepo);
 
-  const { hasGitHub } = useSession();
+  const { hasGitHub, session } = useSession();
   const { preferences, loading: preferencesLoading } = useUserPreferences();
   const defaultAutoCommitPush = preferences?.autoCommitPush ?? false;
   const defaultAutoCreatePr = preferences?.autoCreatePr ?? false;
@@ -69,6 +75,7 @@ export function SessionStarter({
     setSelectedOwner(owner);
     setSelectedRepo(repo);
     setSelectedBranch(null);
+    setCustomNewBranch("");
     setIsNewBranch(false);
   };
 
@@ -76,12 +83,16 @@ export function SessionStarter({
     setSelectedOwner("");
     setSelectedRepo("");
     setSelectedBranch(null);
+    setCustomNewBranch("");
     setIsNewBranch(false);
   };
 
   const handleBranchChange = (branch: string | null, newBranch: boolean) => {
     setSelectedBranch(branch);
     setIsNewBranch(newBranch);
+    if (!newBranch) {
+      setCustomNewBranch("");
+    }
   };
 
   const handleModeChange = (newMode: SessionMode) => {
@@ -96,14 +107,29 @@ export function SessionStarter({
     controlsDisabled || (mode === "repo" && !isRepoSelectionComplete);
   const effectiveAutoCommitPush = autoCommitPush ?? defaultAutoCommitPush;
   const effectiveAutoCreatePr = autoCreatePr ?? defaultAutoCreatePr;
+  const trimmedSessionTitle = sessionTitle.trim();
+  const trimmedCustomNewBranch = customNewBranch.trim();
+  const branchPreview =
+    renderBranchNameTemplate({
+      template: preferences?.defaultBranchNameTemplate,
+      title: trimmedSessionTitle || "My Worktree",
+      username: session?.user?.username ?? "user",
+      randomSuffix: "a1b2c3d4",
+    }) ?? "auto-generated, e.g. ke/a1b2c3d4";
 
   const handleSubmit = () => {
     if (isSubmitDisabled) return;
 
     onSubmit({
+      title: trimmedSessionTitle || undefined,
       repoOwner: mode === "repo" ? selectedOwner || undefined : undefined,
       repoName: mode === "repo" ? selectedRepo || undefined : undefined,
-      branch: mode === "repo" ? selectedBranch || undefined : undefined,
+      branch:
+        mode === "repo"
+          ? isNewBranch
+            ? trimmedCustomNewBranch || undefined
+            : selectedBranch || undefined
+          : undefined,
       cloneUrl:
         mode === "repo" && selectedOwner && selectedRepo
           ? `https://github.com/${selectedOwner}/${selectedRepo}`
@@ -128,6 +154,21 @@ export function SessionStarter({
       )}
     >
       <div className="flex flex-col gap-4">
+        <div className="grid gap-2">
+          <Label htmlFor="session-title">Worktree name</Label>
+          <Input
+            id="session-title"
+            value={sessionTitle}
+            onChange={(event) => setSessionTitle(event.target.value)}
+            placeholder="Optional, e.g. Fix billing webhook"
+            disabled={controlsDisabled}
+          />
+          <p className="text-xs text-muted-foreground">
+            Used for the session title and, when configured, the default new
+            branch name.
+          </p>
+        </div>
+
         <div className="flex rounded-lg bg-muted/70 p-1 dark:bg-white/[0.04]">
           <button
             type="button"
@@ -165,13 +206,33 @@ export function SessionStarter({
               onSelect={handleRepoSelect}
             />
             {hasGitHub && selectedOwner && selectedRepo && (
-              <BranchSelectorCompact
-                owner={selectedOwner}
-                repo={selectedRepo}
-                value={selectedBranch}
-                isNewBranch={isNewBranch}
-                onChange={handleBranchChange}
-              />
+              <>
+                <BranchSelectorCompact
+                  owner={selectedOwner}
+                  repo={selectedRepo}
+                  value={selectedBranch}
+                  isNewBranch={isNewBranch}
+                  onChange={handleBranchChange}
+                />
+                {isNewBranch && (
+                  <div className="grid gap-2">
+                    <Label htmlFor="new-branch-name">New branch name</Label>
+                    <Input
+                      id="new-branch-name"
+                      value={customNewBranch}
+                      onChange={(event) =>
+                        setCustomNewBranch(event.target.value)
+                      }
+                      placeholder={branchPreview}
+                      disabled={controlsDisabled}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Leave blank to use the default pattern:{" "}
+                      <span className="font-mono">{branchPreview}</span>
+                    </p>
+                  </div>
+                )}
+              </>
             )}
           </div>
         )}

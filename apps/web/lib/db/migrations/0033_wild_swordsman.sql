@@ -1,0 +1,1 @@
+ALTER TABLE "user_preferences" ADD COLUMN "default_branch_name_template" text DEFAULT '';

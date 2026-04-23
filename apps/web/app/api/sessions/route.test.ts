@@ -15,6 +15,13 @@ let currentSession: {
   },
 };
 const createCalls: Array<Record<string, unknown>> = [];
+let preferencesState = {
+  defaultModelId: "openai/gpt-5.4",
+  autoCommitPush: false,
+  autoCreatePr: false,
+  defaultBranchNameTemplate: "",
+  globalSkillRefs: [{ source: "local/skills", skillName: "ai-sdk" }],
+};
 
 mock.module("@/lib/session/get-server-session", () => ({
   getServerSession: async () => currentSession,
@@ -25,12 +32,7 @@ mock.module("@/lib/random-city", () => ({
 }));
 
 mock.module("@/lib/db/user-preferences", () => ({
-  getUserPreferences: async () => ({
-    defaultModelId: "openai/gpt-5.4",
-    autoCommitPush: false,
-    autoCreatePr: false,
-    globalSkillRefs: [{ source: "local/skills", skillName: "ai-sdk" }],
-  }),
+  getUserPreferences: async () => preferencesState,
 }));
 
 mock.module("@/lib/db/sessions", () => ({
@@ -83,6 +85,13 @@ describe("/api/sessions POST", () => {
       },
     };
     createCalls.length = 0;
+    preferencesState = {
+      defaultModelId: "openai/gpt-5.4",
+      autoCommitPush: false,
+      autoCreatePr: false,
+      defaultBranchNameTemplate: "",
+      globalSkillRefs: [{ source: "local/skills", skillName: "ai-sdk" }],
+    };
   });
 
   test("returns 401 when no local workspace session exists", async () => {
@@ -146,6 +155,69 @@ describe("/api/sessions POST", () => {
     expect(createCalls[0]?.branch).toEqual(
       expect.stringMatching(/^n\/[a-f0-9]{8}$/),
     );
+  });
+
+  test("uses explicit session titles and custom new branch names", async () => {
+    const { POST } = await routeModulePromise;
+
+    const response = await POST(
+      createJsonRequest({
+        title: "Fix Checkout",
+        repoOwner: "vercel",
+        repoName: "open-harness",
+        cloneUrl: "https://github.com/vercel/open-harness",
+        branch: "kesku/fix-checkout",
+        isNewBranch: true,
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(createCalls[0]).toMatchObject({
+      title: "Fix Checkout",
+      branch: "kesku/fix-checkout",
+      isNewBranch: true,
+    });
+  });
+
+  test("uses the default branch template for generated new branches", async () => {
+    preferencesState.defaultBranchNameTemplate = "kesku/[worktree]";
+    const { POST } = await routeModulePromise;
+
+    const response = await POST(
+      createJsonRequest({
+        title: "Fix Checkout Flow",
+        repoOwner: "vercel",
+        repoName: "open-harness",
+        cloneUrl: "https://github.com/vercel/open-harness",
+        isNewBranch: true,
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(createCalls[0]).toMatchObject({
+      title: "Fix Checkout Flow",
+      branch: "kesku/fix-checkout-flow",
+      isNewBranch: true,
+    });
+  });
+
+  test("rejects invalid custom new branch names", async () => {
+    const { POST } = await routeModulePromise;
+
+    const response = await POST(
+      createJsonRequest({
+        repoOwner: "vercel",
+        repoName: "open-harness",
+        cloneUrl: "https://github.com/vercel/open-harness",
+        branch: "bad branch",
+        isNewBranch: true,
+      }),
+    );
+    const body = (await response.json()) as { error: string };
+
+    expect(response.status).toBe(400);
+    expect(body.error).toBe("Invalid branch name");
+    expect(createCalls).toHaveLength(0);
   });
 
   test("rejects invalid repository owners", async () => {

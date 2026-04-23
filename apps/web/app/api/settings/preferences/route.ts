@@ -6,6 +6,7 @@ import {
 } from "@/lib/db/user-preferences";
 import { getAvailableSandboxTypes } from "@/lib/sandbox/backend";
 import type { SandboxType } from "@/components/sandbox-selector-compact";
+import { normalizeBranchNameTemplate } from "@/lib/git/branch-names";
 import {
   globalSkillRefsSchema,
   type GlobalSkillRef,
@@ -16,6 +17,7 @@ interface UpdatePreferencesRequest {
   defaultSubagentModelId?: string | null;
   defaultSandboxType?: SandboxType;
   defaultDiffMode?: DiffMode;
+  defaultBranchNameTemplate?: string;
   autoCommitPush?: boolean;
   autoCreatePr?: boolean;
   alertsEnabled?: boolean;
@@ -66,6 +68,19 @@ export async function PATCH(req: Request) {
     ) {
       return Response.json({ error: "Invalid diff mode" }, { status: 400 });
     }
+  }
+
+  if (body.defaultBranchNameTemplate !== undefined) {
+    if (typeof body.defaultBranchNameTemplate !== "string") {
+      return Response.json(
+        { error: "Invalid defaultBranchNameTemplate value" },
+        { status: 400 },
+      );
+    }
+
+    body.defaultBranchNameTemplate = normalizeBranchNameTemplate(
+      body.defaultBranchNameTemplate,
+    );
   }
 
   if (

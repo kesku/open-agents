@@ -15,6 +15,7 @@ describe("toUserPreferencesData", () => {
       defaultSubagentModelId: null,
       defaultSandboxType: "docker-container",
       defaultDiffMode: "unified",
+      defaultBranchNameTemplate: "",
       autoCommitPush: false,
       autoCreatePr: false,
       alertsEnabled: true,
@@ -68,6 +69,16 @@ describe("toUserPreferencesData", () => {
 
     expect(result.defaultSandboxType).toBe("vercel");
     expect(result.defaultDiffMode).toBe("unified");
+  });
+
+  test("keeps a valid default branch name template", async () => {
+    const { toUserPreferencesData } = await userPreferencesModulePromise;
+
+    const result = toUserPreferencesData({
+      defaultBranchNameTemplate: " kesku/[worktree] ",
+    });
+
+    expect(result.defaultBranchNameTemplate).toBe("kesku/[worktree]");
   });
 
   test("drops invalid globalSkillRefs payloads", async () => {
@@ -148,6 +159,7 @@ describe("toUserPreferencesData", () => {
       defaultSubagentModelId: null,
       defaultSandboxType: "vercel",
       defaultDiffMode: "split",
+      defaultBranchNameTemplate: "",
       autoCommitPush: true,
       autoCreatePr: true,
       alertsEnabled: true,
@@ -170,6 +182,7 @@ describe("toUserPreferencesData", () => {
       defaultSubagentModelId: null,
       defaultSandboxType: "vercel",
       defaultDiffMode: "split",
+      defaultBranchNameTemplate: "",
       autoCommitPush: true,
       autoCreatePr: true,
       alertsEnabled: true,

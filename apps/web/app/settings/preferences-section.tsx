@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Plus, Search, Trash2, X } from "lucide-react";
 import { type ThemePreference, useTheme } from "@/app/providers";
 import {
@@ -117,10 +117,15 @@ export function PreferencesSection() {
   const [globalSkillsError, setGlobalSkillsError] = useState<string | null>(
     null,
   );
+  const [branchTemplateDraft, setBranchTemplateDraft] = useState("");
 
   const selectedDefaultModelId =
     preferences?.defaultModelId ?? getDefaultModelOptionId(modelOptions);
   const selectedSubagentModelId = preferences?.defaultSubagentModelId ?? "auto";
+
+  useEffect(() => {
+    setBranchTemplateDraft(preferences?.defaultBranchNameTemplate ?? "");
+  }, [preferences?.defaultBranchNameTemplate]);
 
   const defaultModelOptions = useMemo(
     () => withMissingModelOption(modelOptions, selectedDefaultModelId),
@@ -179,6 +184,22 @@ export function PreferencesSection() {
       await updatePreferences({ defaultDiffMode: diffMode });
     } catch (error) {
       console.error("Failed to update diff mode preference:", error);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleBranchTemplateSave = async () => {
+    const nextTemplate = branchTemplateDraft.trim();
+    if (nextTemplate === (preferences?.defaultBranchNameTemplate ?? "")) {
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      await updatePreferences({ defaultBranchNameTemplate: nextTemplate });
+    } catch (error) {
+      console.error("Failed to update branch name template:", error);
     } finally {
       setIsSaving(false);
     }
@@ -407,6 +428,30 @@ export function PreferencesSection() {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="branch-template">New Branch Pattern</Label>
+              <Input
+                id="branch-template"
+                value={branchTemplateDraft}
+                onChange={(event) => setBranchTemplateDraft(event.target.value)}
+                onBlur={() => {
+                  void handleBranchTemplateSave();
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.currentTarget.blur();
+                  }
+                }}
+                placeholder="kesku/[worktree]"
+                disabled={isSaving}
+              />
+              <p className="text-xs text-muted-foreground">
+                Used for auto-created branches. Supports <code>[worktree]</code>
+                , <code>[user]</code>, and <code>[random]</code>. Plain text is
+                treated as a prefix.
+              </p>
             </div>
           </div>
 

@@ -5,6 +5,10 @@ import {
   getConfiguredSandboxBackend,
   isSupportedSandboxType,
 } from "@/lib/sandbox/backend";
+import {
+  DEFAULT_BRANCH_NAME_TEMPLATE,
+  normalizeBranchNameTemplate,
+} from "@/lib/git/branch-names";
 import { modelVariantsSchema, type ModelVariant } from "@/lib/model-variants";
 import {
   normalizeGlobalSkillRefs,
@@ -20,6 +24,7 @@ export interface UserPreferencesData {
   defaultSubagentModelId: string | null;
   defaultSandboxType: SandboxType;
   defaultDiffMode: DiffMode;
+  defaultBranchNameTemplate: string;
   autoCommitPush: boolean;
   autoCreatePr: boolean;
   alertsEnabled: boolean;
@@ -35,6 +40,7 @@ const DEFAULT_PREFERENCES: UserPreferencesData = {
   defaultSubagentModelId: null,
   defaultSandboxType: getConfiguredSandboxBackend(),
   defaultDiffMode: "unified",
+  defaultBranchNameTemplate: DEFAULT_BRANCH_NAME_TEMPLATE,
   autoCommitPush: false,
   autoCreatePr: false,
   alertsEnabled: true,
@@ -78,20 +84,23 @@ function normalizeEnabledModelIds(value: unknown): string[] {
 }
 
 export function toUserPreferencesData(
-  row?: Pick<
-    UserPreferences,
-    | "defaultModelId"
-    | "defaultSubagentModelId"
-    | "defaultSandboxType"
-    | "defaultDiffMode"
-    | "autoCommitPush"
-    | "autoCreatePr"
-    | "alertsEnabled"
-    | "alertSoundEnabled"
-    | "publicUsageEnabled"
-    | "globalSkillRefs"
-    | "modelVariants"
-    | "enabledModelIds"
+  row?: Partial<
+    Pick<
+      UserPreferences,
+      | "defaultModelId"
+      | "defaultSubagentModelId"
+      | "defaultSandboxType"
+      | "defaultDiffMode"
+      | "defaultBranchNameTemplate"
+      | "autoCommitPush"
+      | "autoCreatePr"
+      | "alertsEnabled"
+      | "alertSoundEnabled"
+      | "publicUsageEnabled"
+      | "globalSkillRefs"
+      | "modelVariants"
+      | "enabledModelIds"
+    >
   >,
 ): UserPreferencesData {
   const parsedModelVariants = modelVariantsSchema.safeParse(
@@ -103,6 +112,9 @@ export function toUserPreferencesData(
     defaultSubagentModelId: row?.defaultSubagentModelId ?? null,
     defaultSandboxType: normalizeSandboxType(row?.defaultSandboxType),
     defaultDiffMode: normalizeDiffMode(row?.defaultDiffMode),
+    defaultBranchNameTemplate: normalizeBranchNameTemplate(
+      row?.defaultBranchNameTemplate,
+    ),
     autoCommitPush: row?.autoCommitPush ?? DEFAULT_PREFERENCES.autoCommitPush,
     autoCreatePr: row?.autoCreatePr ?? DEFAULT_PREFERENCES.autoCreatePr,
     alertsEnabled: row?.alertsEnabled ?? DEFAULT_PREFERENCES.alertsEnabled,
@@ -170,6 +182,9 @@ export async function updateUserPreferences(
         updates.defaultSandboxType ?? DEFAULT_PREFERENCES.defaultSandboxType,
       defaultDiffMode:
         updates.defaultDiffMode ?? DEFAULT_PREFERENCES.defaultDiffMode,
+      defaultBranchNameTemplate:
+        updates.defaultBranchNameTemplate ??
+        DEFAULT_PREFERENCES.defaultBranchNameTemplate,
       autoCommitPush:
         updates.autoCommitPush ?? DEFAULT_PREFERENCES.autoCommitPush,
       autoCreatePr: updates.autoCreatePr ?? DEFAULT_PREFERENCES.autoCreatePr,

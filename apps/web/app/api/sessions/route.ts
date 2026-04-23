@@ -10,6 +10,10 @@ import {
   isValidGitHubRepoName,
   isValidGitHubRepoOwner,
 } from "@/lib/github/repo-identifiers";
+import {
+  isValidBranchName,
+  renderBranchNameTemplate,
+} from "@/lib/git/branch-names";
 import { getRandomCityName } from "@/lib/random-city";
 import {
   getConfiguredSandboxBackend,
@@ -29,20 +33,32 @@ interface CreateSessionRequest {
   autoCreatePr?: boolean;
 }
 
-function generateBranchName(username: string, name?: string | null): string {
+function generateBranchName(params: {
+  username: string;
+  name?: string | null;
+  title: string;
+  template?: string;
+}): string {
   let initials = "nb";
-  if (name) {
+  if (params.name) {
     initials =
-      name
+      params.name
         .split(" ")
         .map((n) => n[0]?.toLowerCase() ?? "")
         .join("")
         .slice(0, 2) || "nb";
-  } else if (username) {
-    initials = username.slice(0, 2).toLowerCase();
+  } else if (params.username) {
+    initials = params.username.slice(0, 2).toLowerCase();
   }
   const randomSuffix = crypto.randomUUID().replace(/-/g, "").slice(0, 8);
-  return `${initials}/${randomSuffix}`;
+  const templatedBranch = renderBranchNameTemplate({
+    template: params.template,
+    title: params.title,
+    username: params.username,
+    randomSuffix,
+  });
+
+  return templatedBranch ?? `${initials}/${randomSuffix}`;
 }
 
 async function resolveSessionTitle(
@@ -218,11 +234,6 @@ export async function POST(req: Request) {
     autoCreatePr,
   } = body;
 
-  let finalBranch = branch;
-  if (isNewBranch) {
-    finalBranch = generateBranchName(session.user.username, session.user.name);
-  }
-
   try {
     const titlePromise = resolveSessionTitle(body, session.user.id);
     const preferencesPromise = getUserPreferences(session.user.id);
@@ -231,6 +242,26 @@ export async function POST(req: Request) {
       titlePromise,
       preferencesPromise,
     ]);
+    let finalBranch = branch;
+    if (isNewBranch) {
+      const explicitBranch = branch?.trim();
+      if (explicitBranch) {
+        if (!isValidBranchName(explicitBranch)) {
+          return Response.json(
+            { error: "Invalid branch name" },
+            { status: 400 },
+          );
+        }
+        finalBranch = explicitBranch;
+      } else {
+        finalBranch = generateBranchName({
+          username: session.user.username,
+          name: session.user.name,
+          title,
+          template: preferences.defaultBranchNameTemplate,
+        });
+      }
+    }
     const effectiveAutoCommitPush =
       autoCommitPush ?? preferences.autoCommitPush;
     const effectiveAutoCreatePr = autoCreatePr ?? preferences.autoCreatePr;

@@ -380,6 +380,7 @@ export const userPreferences = pgTable("user_preferences", {
   defaultDiffMode: text("default_diff_mode", {
     enum: ["unified", "split"],
   }).default("unified"),
+  defaultBranchNameTemplate: text("default_branch_name_template").default(""),
   autoCommitPush: boolean("auto_commit_push").notNull().default(false),
   autoCreatePr: boolean("auto_create_pr").notNull().default(false),
   alertsEnabled: boolean("alerts_enabled").notNull().default(true),
