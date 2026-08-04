@@ -1,6 +1,6 @@
 import type { Sandbox, SandboxHooks } from "./interface.ts";
 import type { SandboxStatus } from "./types.ts";
-import { connectVercel } from "./vercel/connect.ts";
+import type { DockerState } from "./docker/state.ts";
 import type { VercelState } from "./vercel/state.ts";
 
 // Re-export SandboxStatus from types for convenience
@@ -10,7 +10,9 @@ export type { SandboxStatus };
  * Unified sandbox state type.
  * Use `type` discriminator to determine which sandbox implementation to use.
  */
-export type SandboxState = { type: "vercel" } & VercelState;
+export type SandboxState =
+  | ({ type: "vercel" } & VercelState)
+  | ({ type: "docker" } & DockerState);
 
 /**
  * Base connect options for all sandbox types.
@@ -50,7 +52,7 @@ export interface ConnectOptions {
  * Configuration for connecting to a sandbox.
  */
 export type SandboxConnectConfig = {
-  state: { type: "vercel" } & VercelState;
+  state: SandboxState;
   options?: ConnectOptions;
 };
 
@@ -69,9 +71,35 @@ export async function connectSandbox(
 
   if (isNewApi) {
     const config = configOrState as SandboxConnectConfig;
-    return connectVercel(config.state, config.options);
+    return connectByType(config.state, config.options);
   }
 
   const state = configOrState as SandboxState;
-  return connectVercel(state, legacyOptions);
+  return connectByType(state, legacyOptions);
+}
+
+async function connectByType(
+  state: SandboxState,
+  options?: ConnectOptions,
+): Promise<Sandbox> {
+  if (state.type === "docker") {
+    const { connectDocker } = await import("./docker/connect.ts");
+    return connectDocker(state, options);
+  }
+
+  const { connectVercel } = await import("./vercel/connect.ts");
+  return connectVercel(state, options);
+}
+
+/** Stop the sandbox and delete its persisted workspace. */
+export async function destroySandbox(state: SandboxState): Promise<void> {
+  if (state.type === "docker") {
+    const { destroyDocker } = await import("./docker/connect.ts");
+    await destroyDocker(state);
+    return;
+  }
+
+  const { connectVercel } = await import("./vercel/connect.ts");
+  const sandbox = await connectVercel(state, { resume: false });
+  await sandbox.stop();
 }

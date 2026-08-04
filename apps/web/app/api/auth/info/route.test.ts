@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import type { NextRequest } from "next/server";
 
 type TestSession = {
-  authProvider: "vercel" | "github";
+  authProvider: "vercel" | "github" | "local";
   user: {
     id: string;
     username: string;
@@ -18,6 +18,7 @@ let installations: Array<{ installationId: number }> = [];
 let isAdmin = false;
 
 const originalNodeEnv = process.env.NODE_ENV;
+const originalDeploymentMode = process.env.OPEN_AGENTS_DEPLOYMENT_MODE;
 
 mock.module("server-only", () => ({}));
 
@@ -53,9 +54,15 @@ function createRequest(url = "http://localhost/api/auth/info"): NextRequest {
 describe("GET /api/auth/info", () => {
   afterEach(() => {
     Object.assign(process.env, { NODE_ENV: originalNodeEnv });
+    if (originalDeploymentMode === undefined) {
+      delete process.env.OPEN_AGENTS_DEPLOYMENT_MODE;
+    } else {
+      process.env.OPEN_AGENTS_DEPLOYMENT_MODE = originalDeploymentMode;
+    }
   });
 
   beforeEach(() => {
+    process.env.OPEN_AGENTS_DEPLOYMENT_MODE = "vercel";
     session = {
       authProvider: "vercel",
       user: {
@@ -107,6 +114,7 @@ describe("GET /api/auth/info", () => {
       hasGitHub: true,
       hasGitHubAccount: true,
       hasGitHubInstallations: true,
+      githubConnectionMode: "github-app",
     });
   });
 
@@ -124,6 +132,7 @@ describe("GET /api/auth/info", () => {
       hasGitHub: false,
       hasGitHubAccount: false,
       hasGitHubInstallations: false,
+      githubConnectionMode: "github-app",
     });
   });
 
@@ -143,6 +152,7 @@ describe("GET /api/auth/info", () => {
       hasGitHub: false,
       hasGitHubAccount: false,
       hasGitHubInstallations: false,
+      githubConnectionMode: "github-app",
     });
   });
 
@@ -161,6 +171,38 @@ describe("GET /api/auth/info", () => {
       hasGitHub: false,
       hasGitHubAccount: false,
       hasGitHubInstallations: false,
+      githubConnectionMode: "github-app",
+    });
+  });
+
+  test("reports the environment-managed GitHub connection in local mode", async () => {
+    process.env.OPEN_AGENTS_DEPLOYMENT_MODE = "local";
+    session = {
+      authProvider: "local",
+      user: {
+        id: "user-1",
+        username: "owner",
+        email: "owner@example.com",
+        avatar: "",
+      },
+    };
+    hasGitHubLinked = true;
+    installations = [];
+    isAdmin = true;
+    const { GET } = await routeModulePromise;
+
+    const response = await GET(createRequest());
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      user: session.user,
+      authProvider: "local",
+      isAdmin: false,
+      isManagedTemplateTrialUser: false,
+      hasGitHub: true,
+      hasGitHubAccount: true,
+      hasGitHubInstallations: true,
+      githubConnectionMode: "local-token",
     });
   });
 });

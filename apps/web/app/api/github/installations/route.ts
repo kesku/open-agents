@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { getInstallationsByUserId } from "@/lib/db/installations";
 import { getInstallationManageUrl } from "@/lib/github/urls";
 import { getServerSession } from "@/lib/session/get-server-session";
+import { isLocalDeployment } from "@/lib/deployment/mode";
+import { listLocalGitHubAccounts } from "@/lib/github/local";
 
 export async function GET() {
   const session = await getServerSession();
@@ -11,6 +13,19 @@ export async function GET() {
   }
 
   try {
+    if (isLocalDeployment()) {
+      const accounts = await listLocalGitHubAccounts();
+      return NextResponse.json(
+        accounts.map((account) => ({
+          installationId: account.githubId,
+          accountLogin: account.login,
+          accountType: account.accountType,
+          repositorySelection: "all" as const,
+          installationUrl: null,
+        })),
+      );
+    }
+
     const installations = await getInstallationsByUserId(session.user.id);
 
     return NextResponse.json(

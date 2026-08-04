@@ -2,6 +2,7 @@ import { describe, expect, mock, test } from "bun:test";
 import type { ProviderOptionsByProvider } from "./models";
 
 const createGatewayCalls: Array<Record<string, unknown>> = [];
+const createOpenAICalls: Array<Record<string, unknown>> = [];
 
 mock.module("ai", () => {
   const gateway = (modelId: string) => ({ modelId });
@@ -21,6 +22,16 @@ mock.module("ai", () => {
 
 mock.module("@ai-sdk/devtools", () => ({
   devToolsMiddleware: () => ({ kind: "devtools-middleware" }),
+}));
+
+mock.module("@ai-sdk/openai", () => ({
+  createOpenAI: (settings?: Record<string, unknown>) => {
+    createOpenAICalls.push(settings ?? {});
+    return {
+      chat: (modelId: string) => ({ api: "chat", modelId }),
+      responses: (modelId: string) => ({ api: "responses", modelId }),
+    };
+  },
 }));
 
 const {
@@ -288,5 +299,101 @@ describe("gateway attribution headers", () => {
         },
       },
     ]);
+  });
+});
+
+describe("OpenAI-compatible providers", () => {
+  test("uses a configured provider instead of AI Gateway", () => {
+    createGatewayCalls.length = 0;
+    createOpenAICalls.length = 0;
+
+    const model = gateway("openrouter/google/gemini-2.5-pro", {
+      openAICompatibleProviders: [
+        {
+          id: "openrouter",
+          name: "OpenRouter",
+          baseURL: "https://openrouter.ai/api/v1",
+          apiKey: "or-key",
+        },
+      ],
+    });
+
+    expect(model as unknown).toEqual({
+      api: "chat",
+      modelId: "google/gemini-2.5-pro",
+    });
+    expect(createOpenAICalls).toEqual([
+      {
+        name: "openrouter",
+        baseURL: "https://openrouter.ai/api/v1",
+        apiKey: "or-key",
+      },
+    ]);
+    expect(createGatewayCalls).toEqual([]);
+  });
+
+  test("uses the Responses API for a directly configured OpenAI provider", () => {
+    createGatewayCalls.length = 0;
+    createOpenAICalls.length = 0;
+
+    const model = gateway("openai/gpt-5.4", {
+      openAICompatibleProviders: [
+        {
+          id: "openai",
+          name: "OpenAI",
+          baseURL: "https://api.openai.com/v1",
+          apiKey: "sk-test",
+        },
+      ],
+    });
+
+    expect(model as unknown).toEqual({
+      api: "responses",
+      modelId: "gpt-5.4",
+    });
+    expect(createGatewayCalls).toEqual([]);
+  });
+
+  test("keeps AI Gateway as the fallback for unmatched providers", () => {
+    createGatewayCalls.length = 0;
+    createOpenAICalls.length = 0;
+
+    gateway("anthropic/claude-sonnet-4.6", {
+      openAICompatibleProviders: [
+        {
+          id: "openrouter",
+          name: "OpenRouter",
+          baseURL: "https://openrouter.ai/api/v1",
+          apiKey: "or-key",
+        },
+      ],
+    });
+
+    expect(createOpenAICalls).toEqual([]);
+    expect(createGatewayCalls).toHaveLength(1);
+  });
+
+  test("supports keyless local OpenAI-compatible providers", () => {
+    createGatewayCalls.length = 0;
+    createOpenAICalls.length = 0;
+
+    gateway("ollama/qwen3-coder", {
+      openAICompatibleProviders: [
+        {
+          id: "ollama",
+          name: "Ollama",
+          baseURL: "http://ollama:11434/v1",
+        },
+      ],
+    });
+
+    expect(createOpenAICalls).toEqual([
+      {
+        name: "ollama",
+        baseURL: "http://ollama:11434/v1",
+        apiKey: "open-agents-keyless",
+      },
+    ]);
+    expect(createGatewayCalls).toEqual([]);
   });
 });

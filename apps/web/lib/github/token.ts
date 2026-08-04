@@ -1,5 +1,7 @@
 import "server-only";
 import { auth } from "@/lib/auth/config";
+import { isLocalDeployment } from "@/lib/deployment/mode";
+import { getLocalGitHubToken } from "./local";
 
 /**
  * Get a valid GitHub access token for the given user.
@@ -8,6 +10,10 @@ import { auth } from "@/lib/auth/config";
 export async function getUserGitHubToken(
   userId: string,
 ): Promise<string | null> {
+  if (isLocalDeployment()) {
+    return getLocalGitHubToken();
+  }
+
   try {
     const result = await auth.api.getAccessToken({
       body: { providerId: "github", userId },

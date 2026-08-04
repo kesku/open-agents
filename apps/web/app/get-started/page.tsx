@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { isManagedTemplateTrialUser } from "@/lib/managed-template-trial";
 import { getServerSession } from "@/lib/session/get-server-session";
 import { needsOnboarding } from "@/lib/onboarding";
+import { isLocalDeployment } from "@/lib/deployment/mode";
 import { GetStartedFlow } from "./get-started-flow";
 
 export const metadata: Metadata = {
@@ -33,6 +34,10 @@ export default async function GetStartedPage({
   const session = await getServerSession();
   if (!session?.user) {
     redirect("/");
+  }
+
+  if (isLocalDeployment()) {
+    redirect("/sessions");
   }
 
   const resolvedSearchParams = await searchParams;

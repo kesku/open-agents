@@ -295,6 +295,7 @@ export async function performAutoCreatePr(
 
   const prContentResult = await generatePullRequestContentFromSandbox({
     sandbox,
+    userId,
     sessionId,
     sessionTitle,
     baseBranch: defaultBranch,

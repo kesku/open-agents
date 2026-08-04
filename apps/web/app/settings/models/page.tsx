@@ -1,13 +1,18 @@
 import type { Metadata } from "next";
+import { isDirectModelProvidersEnabled } from "@/lib/model-provider-access";
+import { ModelProvidersSection } from "../model-providers-section";
 import { ModelVariantsSection } from "../model-variants-section";
 import { ModelPreferencesSection } from "../preferences-section";
 
 export const metadata: Metadata = {
   title: "Models",
-  description: "Configure model preferences and create model variants.",
+  description:
+    "Configure model preferences, direct providers, and model variants.",
 };
 
 export default function ModelsPage() {
+  const directModelProvidersEnabled = isDirectModelProvidersEnabled();
+
   return (
     <div className="space-y-8">
       <div className="space-y-1">
@@ -21,6 +26,13 @@ export default function ModelsPage() {
       <ModelPreferencesSection />
 
       <div className="border-t border-border/50" />
+
+      {directModelProvidersEnabled ? (
+        <>
+          <ModelProvidersSection />
+          <div className="border-t border-border/50" />
+        </>
+      ) : null}
 
       <ModelVariantsSection />
     </div>

@@ -6,7 +6,8 @@ import type { CheckRun } from "@/lib/github/pulls";
 import { getUserGitHubToken } from "@/lib/github/token";
 import { checkRateLimit, rateLimitKey } from "@/lib/rate-limit";
 import { Octokit } from "@octokit/rest";
-import { gateway, generateText } from "ai";
+import { generateText } from "ai";
+import { getHelperLanguageModel } from "@/lib/model-runtime";
 
 type RouteContext = {
   params: Promise<{ sessionId: string }>;
@@ -139,7 +140,7 @@ function formatFixResponse(
 
 // ── Log compaction via LLM ──────────────────────────────────────────────
 
-async function compactLog(rawLog: string): Promise<string> {
+async function compactLog(rawLog: string, userId: string): Promise<string> {
   // For short logs, no point running through an LLM — they're already small
   // enough to include in full.
   if (rawLog.length <= 4000) {
@@ -157,7 +158,7 @@ async function compactLog(rawLog: string): Promise<string> {
   }
 
   const result = await generateText({
-    model: gateway("anthropic/claude-haiku-4.5"),
+    model: await getHelperLanguageModel(userId),
     system: LOG_SUMMARIZATION_PROMPT,
     prompt: logInput,
   });
@@ -288,7 +289,7 @@ export async function POST(req: Request, context: RouteContext) {
           compactedLogs[runId] = rawLog;
         } else {
           try {
-            compactedLogs[runId] = await compactLog(rawLog);
+            compactedLogs[runId] = await compactLog(rawLog, authResult.userId);
           } catch {
             // If the LLM call fails, fall back to raw log with basic truncation
             compactedLogs[runId] =

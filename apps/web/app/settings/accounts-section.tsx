@@ -74,6 +74,14 @@ interface ConnectionStatusResponse {
   tokenExpired?: boolean;
 }
 
+interface LocalGitHubAccount {
+  installationId: number;
+  accountLogin: string;
+  accountType: "User" | "Organization";
+  installationUrl: null;
+  repositorySelection: "all";
+}
+
 function GitHubIcon({ className }: { className?: string }) {
   return (
     <svg
@@ -423,7 +431,95 @@ function ConnectionStatusButton({
   );
 }
 
+function LocalAccountsSection() {
+  const { hasGitHub } = useSession();
+  const {
+    reconnectRequired,
+    reason,
+    isLoading: statusLoading,
+  } = useGitHubConnectionStatus({ enabled: hasGitHub });
+  const {
+    data: accounts,
+    error,
+    isLoading,
+  } = useSWR<LocalGitHubAccount[]>(
+    hasGitHub && !reconnectRequired ? "/api/github/installations" : null,
+    fetcher,
+  );
+
+  return (
+    <div className="rounded-lg border border-border/50 bg-muted/10">
+      <div className="border-b border-border/50 px-4 py-3">
+        <div className="flex items-center gap-2.5">
+          <GitHubIcon className="h-5 w-5" />
+          <span className="text-sm font-medium">GitHub</span>
+        </div>
+        <p className="mt-2 text-xs text-muted-foreground">
+          Repository access is managed by LOCAL_GITHUB_ACCESS_TOKEN on this
+          server.
+        </p>
+      </div>
+      <div className="space-y-4 p-4">
+        {!hasGitHub ? (
+          <p className="text-sm text-muted-foreground">
+            Set LOCAL_GITHUB_ACCESS_TOKEN and restart Open Agents to enable
+            repository access.
+          </p>
+        ) : reconnectRequired ? (
+          <div className="flex items-start gap-2 text-sm text-amber-500">
+            <AlertCircle className="mt-0.5 size-4 shrink-0" />
+            <p>
+              {reason === "local_github_unavailable"
+                ? "Open Agents could not reach GitHub. Check GitHub availability and this server's network connection."
+                : "GitHub rejected the configured token. Replace LOCAL_GITHUB_ACCESS_TOKEN and restart Open Agents."}
+            </p>
+          </div>
+        ) : statusLoading || isLoading ? (
+          <ConnectionLoadingSkeleton />
+        ) : error ? (
+          <p className="text-sm text-destructive">
+            Failed to load accounts visible to the configured token.
+          </p>
+        ) : accounts && accounts.length > 0 ? (
+          <div className="space-y-3">
+            {accounts.map((account) => (
+              <div
+                key={account.installationId}
+                className="flex items-center justify-between rounded-md border border-border/50 bg-background/70 px-3 py-2"
+              >
+                <span className="text-sm font-medium">
+                  {account.accountLogin}
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  {account.accountType === "Organization"
+                    ? "Organization"
+                    : "Personal account"}
+                </span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            The token is configured, but no GitHub account could be resolved.
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function AccountsSection() {
+  const { githubConnectionMode, loading } = useSession();
+  if (loading) {
+    return <AccountsSectionSkeleton />;
+  }
+  if (githubConnectionMode === "local-token") {
+    return <LocalAccountsSection />;
+  }
+  return <HostedAccountsSection />;
+}
+
+function HostedAccountsSection() {
   const { hasGitHubAccount, hasGitHub, loading, session } = useSession();
   const isTrialUser = session?.isManagedTemplateTrialUser ?? false;
   const { mutate } = useSWRConfig();

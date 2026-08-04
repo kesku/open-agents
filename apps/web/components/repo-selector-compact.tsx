@@ -154,7 +154,7 @@ export function RepoSelectorCompact({
   selectedRepo,
   onSelect,
 }: RepoSelectorCompactProps) {
-  const { hasGitHub, loading: sessionLoading } = useSession();
+  const { hasGitHub, isLocalGitHub, loading: sessionLoading } = useSession();
   const { reconnectRequired } = useGitHubConnectionStatus({
     enabled: hasGitHub,
   });
@@ -174,7 +174,15 @@ export function RepoSelectorCompact({
   }, []);
 
   const startGitHubReconnect = useCallback(() => {
+    if (isLocalGitHub) {
+      window.location.href = "/settings/connections";
+      return;
+    }
     window.location.href = buildGitHubReconnectUrl(getCurrentPathWithSearch());
+  }, [isLocalGitHub]);
+
+  const openGitHubSettings = useCallback(() => {
+    window.location.href = "/settings/connections";
   }, []);
 
   const { data: installations = [], isLoading: installationsLoading } = useSWR<
@@ -272,10 +280,16 @@ export function RepoSelectorCompact({
   if (!sessionLoading && !hasGitHub) {
     return (
       <GitHubActionCard
-        title="Install GitHub App"
-        description="Continue on GitHub to choose which repositories are available."
-        buttonLabel="Choose repositories"
-        onClick={startGitHubInstall}
+        title={
+          isLocalGitHub ? "GitHub token not configured" : "Install GitHub App"
+        }
+        description={
+          isLocalGitHub
+            ? "Configure LOCAL_GITHUB_ACCESS_TOKEN on the server to browse repositories."
+            : "Continue on GitHub to choose which repositories are available."
+        }
+        buttonLabel={isLocalGitHub ? "View setup" : "Choose repositories"}
+        onClick={isLocalGitHub ? openGitHubSettings : startGitHubInstall}
       />
     );
   }
@@ -295,10 +309,16 @@ export function RepoSelectorCompact({
   if (!installationsLoading && installations.length === 0) {
     return (
       <GitHubActionCard
-        title="Install GitHub App"
-        description="Install the GitHub App to choose which repositories are available."
-        buttonLabel="Choose repositories"
-        onClick={startGitHubInstall}
+        title={
+          isLocalGitHub ? "No GitHub accounts found" : "Install GitHub App"
+        }
+        description={
+          isLocalGitHub
+            ? "Check LOCAL_GITHUB_ACCESS_TOKEN and its GitHub permissions."
+            : "Install the GitHub App to choose which repositories are available."
+        }
+        buttonLabel={isLocalGitHub ? "View setup" : "Choose repositories"}
+        onClick={isLocalGitHub ? openGitHubSettings : startGitHubInstall}
       />
     );
   }
@@ -356,19 +376,21 @@ export function RepoSelectorCompact({
                       </CommandItem>
                     ))}
                   </CommandGroup>
-                  <div className="border-t border-border/70 p-1 dark:border-white/10">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        startGitHubInstall();
-                        setOwnerOpen(false);
-                      }}
-                      className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
-                    >
-                      <Plus className="size-3.5" />
-                      Add GitHub account
-                    </button>
-                  </div>
+                  {!isLocalGitHub ? (
+                    <div className="border-t border-border/70 p-1 dark:border-white/10">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          startGitHubInstall();
+                          setOwnerOpen(false);
+                        }}
+                        className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+                      >
+                        <Plus className="size-3.5" />
+                        Add GitHub account
+                      </button>
+                    </div>
+                  ) : null}
                 </CommandList>
               </Command>
             </PopoverContent>
@@ -451,19 +473,21 @@ export function RepoSelectorCompact({
                     </CommandItem>
                   ))}
                 </CommandGroup>
-                <div className="border-t border-border/70 p-1 dark:border-white/10">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      startGitHubInstall();
-                      setOwnerOpen(false);
-                    }}
-                    className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
-                  >
-                    <Plus className="size-3.5" />
-                    Add GitHub account
-                  </button>
-                </div>
+                {!isLocalGitHub ? (
+                  <div className="border-t border-border/70 p-1 dark:border-white/10">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        startGitHubInstall();
+                        setOwnerOpen(false);
+                      }}
+                      className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+                    >
+                      <Plus className="size-3.5" />
+                      Add GitHub account
+                    </button>
+                  </div>
+                ) : null}
               </CommandList>
             </Command>
           </PopoverContent>

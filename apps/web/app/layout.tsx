@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
+import { isLocalDeployment } from "@/lib/deployment/mode";
 import { Providers } from "./providers";
 import "./globals.css";
 
@@ -36,13 +37,16 @@ const themeInitializationScript = `
 })();
 `;
 
-const isPreviewDeployment = process.env.VERCEL_ENV === "preview";
+const localDeployment = isLocalDeployment();
+const isPreviewDeployment =
+  !localDeployment && process.env.VERCEL_ENV === "preview";
 const faviconPath = isPreviewDeployment
   ? "/favicon-preview.svg"
   : "/favicon.ico";
-const metadataBase =
-  process.env.VERCEL_ENV === "production" &&
-  process.env.VERCEL_PROJECT_PRODUCTION_URL
+const metadataBase = localDeployment
+  ? new URL(process.env.APP_URL ?? "http://localhost:3000")
+  : process.env.VERCEL_ENV === "production" &&
+      process.env.VERCEL_PROJECT_PRODUCTION_URL
     ? new URL(`https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`)
     : process.env.VERCEL_URL
       ? new URL(`https://${process.env.VERCEL_URL}`)
@@ -55,7 +59,7 @@ export const metadata: Metadata = {
     template: "%s | Open Agents",
   },
   description:
-    "Spawn coding agents that run infinitely in the cloud. Powered by AI SDK, Gateway, Sandbox, and Workflow SDK.",
+    "Run coding agents in isolated sandboxes, locally or on Vercel.",
   icons: {
     icon: faviconPath,
     shortcut: faviconPath,
@@ -79,7 +83,7 @@ export default function RootLayout({
           dangerouslySetInnerHTML={{ __html: themeInitializationScript }}
         />
         <Providers>{children}</Providers>
-        <Analytics />
+        {localDeployment ? null : <Analytics />}
       </body>
     </html>
   );

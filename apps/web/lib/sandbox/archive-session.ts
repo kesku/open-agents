@@ -1,10 +1,10 @@
 import "server-only";
 
-import { connectSandbox } from "@open-agents/sandbox";
+import { connectSandbox, destroySandbox } from "@open-agents/sandbox";
 import { getSessionById, updateSession } from "@/lib/db/sessions";
 import { findPullRequest, getPullRequestStatus } from "@/lib/github/pulls";
 import { getUserGitHubToken } from "@/lib/github/token";
-import { canOperateOnSandbox, clearSandboxState } from "./utils";
+import { canOperateOnSandbox, clearSandboxResumeState } from "./utils";
 
 type SessionRecord = NonNullable<Awaited<ReturnType<typeof getSessionById>>>;
 type SessionUpdateInput = Parameters<typeof updateSession>[1];
@@ -145,17 +145,16 @@ async function finalizeArchivedSessionSandbox(
     if (!archivedSession || archivedSession.status !== "archived") {
       return;
     }
-    if (!canOperateOnSandbox(archivedSession.sandboxState)) {
+    if (!archivedSession.sandboxState) {
       return;
     }
 
-    const sandbox = await connectSandbox(archivedSession.sandboxState);
-    await sandbox.stop();
+    await destroySandbox(archivedSession.sandboxState);
 
     await updateSession(sessionId, {
       snapshotUrl: null,
       snapshotCreatedAt: null,
-      sandboxState: clearSandboxState(archivedSession.sandboxState),
+      sandboxState: clearSandboxResumeState(archivedSession.sandboxState),
       lifecycleState: "archived",
       sandboxExpiresAt: null,
       hibernateAfter: null,
@@ -181,15 +180,6 @@ async function finalizeArchivedSessionSandbox(
         hibernateAfter: null,
         lifecycleError: `Archive finalization failed: ${errorMessage}`,
       };
-
-      if (
-        !sessionAfterFailure.snapshotUrl &&
-        canOperateOnSandbox(sessionAfterFailure.sandboxState)
-      ) {
-        failurePatch.sandboxState = clearSandboxState(
-          sessionAfterFailure.sandboxState,
-        );
-      }
 
       await updateSession(sessionId, failurePatch);
     } catch (persistError) {

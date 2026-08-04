@@ -57,7 +57,7 @@ export function RepoSelector({
 }: {
   onRepoSelect: (owner: string, repo: string) => void;
 }) {
-  const { hasGitHub } = useSession();
+  const { hasGitHub, isLocalGitHub } = useSession();
   const { reconnectRequired } = useGitHubConnectionStatus({
     enabled: hasGitHub,
   });
@@ -80,8 +80,12 @@ export function RepoSelector({
   }, []);
 
   const startGitHubReconnect = useCallback(() => {
+    if (isLocalGitHub) {
+      window.location.href = "/settings/connections";
+      return;
+    }
     window.location.href = buildGitHubReconnectUrl(getCurrentPathWithSearch());
-  }, []);
+  }, [isLocalGitHub]);
 
   const selectedInstallation = installations.find(
     (installation) => installation.accountLogin === selectedOwner,
@@ -193,8 +197,17 @@ export function RepoSelector({
     return (
       <div className="flex flex-col items-center gap-4">
         <p className="text-sm text-destructive">{error}</p>
-        <Button variant="outline" onClick={startGitHubInstall}>
-          Continue on GitHub
+        <Button
+          variant="outline"
+          onClick={
+            isLocalGitHub
+              ? () => {
+                  window.location.href = "/settings/connections";
+                }
+              : startGitHubInstall
+          }
+        >
+          {isLocalGitHub ? "View GitHub setup" : "Continue on GitHub"}
         </Button>
       </div>
     );
@@ -204,9 +217,21 @@ export function RepoSelector({
     return (
       <div className="flex flex-col items-center gap-4">
         <p className="text-sm text-muted-foreground">
-          Install the GitHub App to choose repository access.
+          {isLocalGitHub
+            ? "No accounts are visible to LOCAL_GITHUB_ACCESS_TOKEN."
+            : "Install the GitHub App to choose repository access."}
         </p>
-        <Button onClick={startGitHubInstall}>Choose repositories</Button>
+        <Button
+          onClick={
+            isLocalGitHub
+              ? () => {
+                  window.location.href = "/settings/connections";
+                }
+              : startGitHubInstall
+          }
+        >
+          {isLocalGitHub ? "View GitHub setup" : "Choose repositories"}
+        </Button>
       </div>
     );
   }

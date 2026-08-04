@@ -5,6 +5,7 @@ import { addCacheControl } from "./context-management";
 import {
   type GatewayModelId,
   gateway,
+  type OpenAICompatibleProviderConfig,
   type ProviderOptionsByProvider,
 } from "./models";
 
@@ -44,6 +45,9 @@ const callOptionsSchema = z.object({
   subagentModel: z.custom<OpenAgentModelInput>().optional(),
   customInstructions: z.string().optional(),
   skills: z.custom<SkillMetadata[]>().optional(),
+  openAICompatibleProviders: z
+    .custom<OpenAICompatibleProviderConfig[]>()
+    .optional(),
 });
 
 export type OpenAgentCallOptions = z.infer<typeof callOptionsSchema>;
@@ -105,10 +109,12 @@ export const openAgent = new ToolLoopAgent({
 
     const callModel = gateway(mainSelection.id, {
       providerOptionsOverrides: mainSelection.providerOptionsOverrides,
+      openAICompatibleProviders: options.openAICompatibleProviders,
     });
     const subagentModel = subagentSelection
       ? gateway(subagentSelection.id, {
           providerOptionsOverrides: subagentSelection.providerOptionsOverrides,
+          openAICompatibleProviders: options.openAICompatibleProviders,
         })
       : undefined;
     const customInstructions = options.customInstructions;

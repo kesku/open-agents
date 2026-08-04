@@ -41,6 +41,7 @@ import {
 } from "./chat-post-finish";
 import { dedupeMessageReasoning } from "@/lib/chat/dedupe-message-reasoning";
 import { getChatById, getSessionById } from "@/lib/db/sessions";
+import { getModelProviderRuntimeConfigs } from "@/lib/db/model-providers";
 import { getUserPreferences } from "@/lib/db/user-preferences";
 import {
   filterModelVariantsForSession,
@@ -58,6 +59,14 @@ import { resolveChatModelSelection } from "../api/chat/_lib/model-selection";
 import { resolveChatSandboxRuntime } from "./chat-sandbox-runtime";
 
 type AuthSessionContext = Pick<AuthSession, "authProvider" | "user"> | null;
+type WorkflowAgentCallOptions = Omit<
+  OpenAgentCallOptions,
+  "openAICompatibleProviders"
+>;
+type PersistedAgentOptions = Omit<
+  WorkflowAgentCallOptions,
+  "sandbox" | "skills"
+>;
 
 type Options = {
   messages: WebAgentUIMessage[];
@@ -68,7 +77,7 @@ type Options = {
   authSession: AuthSessionContext;
   selectedModelId?: string;
   modelId?: string;
-  agentOptions?: Omit<OpenAgentCallOptions, "sandbox" | "skills">;
+  agentOptions?: PersistedAgentOptions;
   assistantId?: string;
   inputMessagesPersisted?: boolean;
   maxSteps?: number;
@@ -79,7 +88,7 @@ type Options = {
 type ChatModelRuntime = {
   selectedModelId: string;
   modelId: string;
-  agentOptions: Omit<OpenAgentCallOptions, "sandbox" | "skills">;
+  agentOptions: PersistedAgentOptions;
   autoCommitEnabled: boolean;
   autoCreatePrEnabled: boolean;
 };
@@ -707,7 +716,7 @@ export async function runAgentWorkflow(options: Options) {
       ),
     };
 
-    const agentOptions: OpenAgentCallOptions = {
+    const agentOptions: WorkflowAgentCallOptions = {
       ...modelRuntime.agentOptions,
       ...options.agentOptions,
       sandbox: {
@@ -736,6 +745,7 @@ export async function runAgentWorkflow(options: Options) {
           workflowRunId,
           options.chatId,
           options.sessionId,
+          options.userId,
           selectedModelId,
           modelId,
           agentOptions,
@@ -1006,15 +1016,18 @@ const runAgentStep = async (
   workflowRunId: string,
   chatId: string,
   sessionId: string,
+  userId: string,
   selectedModelId: string,
   modelId: string,
-  agentOptions: OpenAgentCallOptions,
+  agentOptions: WorkflowAgentCallOptions,
   stepNumber: number,
 ) => {
   "use step";
 
   const stepStartedAt = new Date();
   const { webAgent } = await import("@/app/config");
+  const openAICompatibleProviders =
+    await getModelProviderRuntimeConfigs(userId);
 
   const abortController = new AbortController();
   const stopMonitor = startStopMonitor(workflowRunId, abortController);
@@ -1042,7 +1055,12 @@ const runAgentStep = async (
 
     const result = await webAgent.stream({
       messages,
-      options: agentOptions,
+      options: {
+        ...agentOptions,
+        ...(openAICompatibleProviders.length > 0
+          ? { openAICompatibleProviders }
+          : {}),
+      },
       abortSignal: abortController.signal,
     });
 

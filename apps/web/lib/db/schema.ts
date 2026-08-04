@@ -334,6 +334,31 @@ export type NewWorkflowRunStep = typeof workflowRunSteps.$inferInsert;
 export type GitHubInstallation = typeof githubInstallations.$inferSelect;
 export type NewGitHubInstallation = typeof githubInstallations.$inferInsert;
 
+export const modelProviders = pgTable(
+  "model_providers",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    providerId: text("provider_id").notNull(),
+    displayName: text("display_name").notNull(),
+    baseUrl: text("base_url").notNull(),
+    encryptedApiKey: text("encrypted_api_key"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("model_providers_user_provider_idx").on(
+      table.userId,
+      table.providerId,
+    ),
+  ],
+);
+
+export type ModelProvider = typeof modelProviders.$inferSelect;
+export type NewModelProvider = typeof modelProviders.$inferInsert;
+
 // User preferences for settings
 export const userPreferences = pgTable("user_preferences", {
   id: text("id").primaryKey(),
@@ -346,7 +371,7 @@ export const userPreferences = pgTable("user_preferences", {
   ),
   defaultSubagentModelId: text("default_subagent_model_id"),
   defaultSandboxType: text("default_sandbox_type", {
-    enum: ["vercel"],
+    enum: ["docker", "vercel"],
   }).default("vercel"),
   defaultDiffMode: text("default_diff_mode", {
     enum: ["unified", "split"],

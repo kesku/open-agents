@@ -26,6 +26,17 @@ const upsertCalls: Array<Record<string, unknown>> = [];
 const provisioningKickCalls: string[] = [];
 
 const originalNodeEnv = process.env.NODE_ENV;
+const originalDeploymentMode = process.env.OPEN_AGENTS_DEPLOYMENT_MODE;
+const originalSandboxProvider = process.env.SANDBOX_PROVIDER;
+const originalPublicSandboxProvider = process.env.NEXT_PUBLIC_SANDBOX_PROVIDER;
+
+function restoreEnvironmentValue(name: string, value: string | undefined) {
+  if (value === undefined) {
+    delete process.env[name];
+  } else {
+    process.env[name] = value;
+  }
+}
 
 mock.module("@/lib/session/get-server-session", () => ({
   getServerSession: async () => currentSession,
@@ -124,10 +135,22 @@ function createJsonRequest(
 
 describe("/api/sessions POST vercel project linking", () => {
   afterEach(() => {
-    Object.assign(process.env, { NODE_ENV: originalNodeEnv });
+    restoreEnvironmentValue("NODE_ENV", originalNodeEnv);
+    restoreEnvironmentValue(
+      "OPEN_AGENTS_DEPLOYMENT_MODE",
+      originalDeploymentMode,
+    );
+    restoreEnvironmentValue("SANDBOX_PROVIDER", originalSandboxProvider);
+    restoreEnvironmentValue(
+      "NEXT_PUBLIC_SANDBOX_PROVIDER",
+      originalPublicSandboxProvider,
+    );
   });
 
   beforeEach(() => {
+    process.env.OPEN_AGENTS_DEPLOYMENT_MODE = "vercel";
+    process.env.SANDBOX_PROVIDER = "vercel";
+    process.env.NEXT_PUBLIC_SANDBOX_PROVIDER = "vercel";
     currentSession = {
       user: {
         id: "user-1",

@@ -1,6 +1,11 @@
 import { createAppAuth } from "@octokit/auth-app";
 import { Octokit } from "@octokit/rest";
 import { z } from "zod";
+import {
+  getLocalGitHubToken,
+  isLocalGitHubToken,
+  LOCAL_GITHUB_INSTALLATION_ID,
+} from "./local";
 
 interface GitHubAppConfig {
   appId: number;
@@ -99,6 +104,20 @@ export async function mintInstallationToken(params: {
     throw new Error("Installation tokens must be scoped to exactly one repo");
   }
 
+  if (installationId === LOCAL_GITHUB_INSTALLATION_ID) {
+    const token = getLocalGitHubToken();
+    if (!token) {
+      throw new Error("LOCAL_GITHUB_ACCESS_TOKEN is not configured");
+    }
+    return {
+      token,
+      expiresAt: null,
+      installationId,
+      repositoryIds,
+      permissions,
+    };
+  }
+
   const appJwt = await getAppJwt();
   const response = await fetch(
     `https://api.github.com/app/installations/${installationId}/access_tokens`,
@@ -139,6 +158,10 @@ export async function mintInstallationToken(params: {
 }
 
 export async function revokeInstallationToken(token: string): Promise<void> {
+  if (isLocalGitHubToken(token)) {
+    return;
+  }
+
   const response = await fetch("https://api.github.com/installation/token", {
     method: "DELETE",
     headers: {
@@ -162,6 +185,14 @@ export async function withScopedInstallationOctokit<T>(params: {
   permissions: GitHubInstallationTokenPermissions;
   operation: (octokit: Octokit) => Promise<T>;
 }): Promise<T> {
+  if (params.installationId === LOCAL_GITHUB_INSTALLATION_ID) {
+    const token = getLocalGitHubToken();
+    if (!token) {
+      throw new Error("LOCAL_GITHUB_ACCESS_TOKEN is not configured");
+    }
+    return params.operation(new Octokit({ auth: token }));
+  }
+
   const scopedToken = await mintInstallationToken({
     installationId: params.installationId,
     repositoryIds: [params.repositoryId],

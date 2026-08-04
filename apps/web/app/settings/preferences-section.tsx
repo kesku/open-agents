@@ -5,6 +5,7 @@ import { Plus, Search, Trash2, X } from "lucide-react";
 import { type ThemePreference, useTheme } from "@/app/providers";
 import {
   DEFAULT_SANDBOX_TYPE,
+  SANDBOX_OPTIONS,
   type SandboxType,
 } from "@/components/sandbox-selector-compact";
 import { Button } from "@/components/ui/button";
@@ -35,10 +36,6 @@ import {
   getDefaultModelOptionId,
   withMissingModelOption,
 } from "@/lib/model-options";
-
-const SANDBOX_OPTIONS: Array<{ id: SandboxType; name: string }> = [
-  { id: "vercel", name: "Vercel" },
-];
 
 const THEME_OPTIONS: Array<{ id: ThemePreference; name: string }> = [
   { id: "system", name: "System" },

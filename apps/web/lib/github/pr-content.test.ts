@@ -11,6 +11,9 @@ const originalVercelUrl = process.env.VERCEL_URL;
 const originalVercelEnv = process.env.VERCEL_ENV;
 const originalProductionUrl =
   process.env.NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL;
+const originalDeploymentMode = process.env.OPEN_AGENTS_DEPLOYMENT_MODE;
+const originalAppUrl = process.env.APP_URL;
+const originalBetterAuthUrl = process.env.BETTER_AUTH_URL;
 
 function restoreEnv() {
   if (originalVercelUrl === undefined) {
@@ -30,6 +33,24 @@ function restoreEnv() {
   } else {
     process.env.NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL =
       originalProductionUrl;
+  }
+
+  if (originalDeploymentMode === undefined) {
+    delete process.env.OPEN_AGENTS_DEPLOYMENT_MODE;
+  } else {
+    process.env.OPEN_AGENTS_DEPLOYMENT_MODE = originalDeploymentMode;
+  }
+
+  if (originalAppUrl === undefined) {
+    delete process.env.APP_URL;
+  } else {
+    process.env.APP_URL = originalAppUrl;
+  }
+
+  if (originalBetterAuthUrl === undefined) {
+    delete process.env.BETTER_AUTH_URL;
+  } else {
+    process.env.BETTER_AUTH_URL = originalBetterAuthUrl;
   }
 }
 
@@ -105,6 +126,7 @@ describe("pr-content", () => {
   test("resolvePullRequestAppBaseUrl prefers the active deployment url", async () => {
     const { resolvePullRequestAppBaseUrl } = await prContentModulePromise;
 
+    process.env.OPEN_AGENTS_DEPLOYMENT_MODE = "vercel";
     process.env.VERCEL_URL = "preview-openharness.vercel.app";
     process.env.VERCEL_ENV = "preview";
     process.env.NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL = "openharness.dev";
@@ -117,6 +139,22 @@ describe("pr-content", () => {
     process.env.VERCEL_ENV = "production";
 
     expect(resolvePullRequestAppBaseUrl()).toBe("https://openharness.dev");
+  });
+
+  test("resolvePullRequestAppBaseUrl prefers local application URLs in local mode", async () => {
+    const { resolvePullRequestAppBaseUrl } = await prContentModulePromise;
+
+    process.env.OPEN_AGENTS_DEPLOYMENT_MODE = "local";
+    process.env.APP_URL = "http://open-agents.local:3000";
+    process.env.BETTER_AUTH_URL = "http://auth.local:3000";
+    process.env.VERCEL_URL = "preview-open-agents.vercel.app";
+
+    expect(resolvePullRequestAppBaseUrl()).toBe(
+      "http://open-agents.local:3000",
+    );
+
+    delete process.env.APP_URL;
+    expect(resolvePullRequestAppBaseUrl()).toBe("http://auth.local:3000");
   });
 
   test("appendPullRequestContextSection appends the footer after a horizontal rule", async () => {

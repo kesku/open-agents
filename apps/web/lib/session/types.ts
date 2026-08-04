@@ -1,6 +1,6 @@
 export interface Session {
   created: number;
-  authProvider: "vercel" | "github";
+  authProvider: "local" | "vercel" | "github";
   user: {
     id: string;
     username: string;
@@ -12,10 +12,11 @@ export interface Session {
 
 export interface SessionUserInfo {
   user: Session["user"] | undefined;
-  authProvider?: "vercel" | "github";
+  authProvider?: "local" | "vercel" | "github";
   isAdmin?: boolean;
   isManagedTemplateTrialUser?: boolean;
   hasGitHub?: boolean;
   hasGitHubAccount?: boolean;
   hasGitHubInstallations?: boolean;
+  githubConnectionMode?: "github-app" | "local-token";
 }

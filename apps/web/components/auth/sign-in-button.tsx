@@ -1,9 +1,10 @@
 "use client";
 
-import { Loader2 } from "lucide-react";
+import { Loader2, LogIn } from "lucide-react";
 import { useState, type ComponentProps } from "react";
 import { Button } from "@/components/ui/button";
 import { authClient } from "@/lib/auth/client";
+import { isLocalDeploymentClient } from "@/lib/deployment/mode";
 
 function VercelIcon({ className }: { className?: string }) {
   return (
@@ -45,6 +46,7 @@ export function SignInButton({
   ...props
 }: SignInButtonProps) {
   const [isLoading, setIsLoading] = useState(false);
+  const localDeployment = isLocalDeploymentClient();
 
   function handleSignIn() {
     if (disabled || isLoading) {
@@ -55,6 +57,12 @@ export function SignInButton({
     const redirectPath = resolveRedirectPath(callbackUrl ?? fallback);
 
     setIsLoading(true);
+    if (localDeployment) {
+      const params = new URLSearchParams({ next: redirectPath });
+      window.location.assign(`/sign-in?${params.toString()}`);
+      return;
+    }
+
     authClient.signIn.social({
       provider: "vercel",
       callbackURL: redirectPath,
@@ -68,8 +76,18 @@ export function SignInButton({
       disabled={disabled || isLoading}
       onClick={handleSignIn}
     >
-      {isLoading ? <Loader2 className="animate-spin" /> : <VercelIcon />}
-      {isLoading ? "Signing in..." : "Sign in with Vercel"}
+      {isLoading ? (
+        <Loader2 className="animate-spin" />
+      ) : localDeployment ? (
+        <LogIn />
+      ) : (
+        <VercelIcon />
+      )}
+      {isLoading
+        ? "Signing in..."
+        : localDeployment
+          ? "Sign in"
+          : "Sign in with Vercel"}
     </Button>
   );
 }

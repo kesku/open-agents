@@ -2,6 +2,8 @@ import "server-only";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { accounts } from "@/lib/db/schema";
+import { isLocalDeployment } from "@/lib/deployment/mode";
+import { getLocalGitHubProfile, getLocalGitHubToken } from "./local";
 import { getUserGitHubToken } from "./token";
 
 export interface GitHubUserProfile {
@@ -13,6 +15,10 @@ export interface GitHubUserProfile {
  * Check whether the user has a linked GitHub account in better-auth.
  */
 export async function hasGitHubAccount(userId: string): Promise<boolean> {
+  if (isLocalDeployment()) {
+    return getLocalGitHubToken() !== null;
+  }
+
   const rows = await db
     .select({ id: accounts.id })
     .from(accounts)
@@ -78,6 +84,11 @@ export async function getGitHubUserProfile(
 export async function getGitHubAccountId(
   userId: string,
 ): Promise<string | null> {
+  if (isLocalDeployment()) {
+    const profile = await getLocalGitHubProfile();
+    return profile ? String(profile.githubId) : null;
+  }
+
   const [row] = await db
     .select({ accountId: accounts.accountId })
     .from(accounts)
@@ -90,6 +101,10 @@ export async function getGitHubAccountId(
  * Delete the GitHub account link from better-auth's accounts table.
  */
 export async function deleteGitHubAccountLink(userId: string): Promise<void> {
+  if (isLocalDeployment()) {
+    return;
+  }
+
   await db
     .delete(accounts)
     .where(and(eq(accounts.userId, userId), eq(accounts.providerId, "github")));

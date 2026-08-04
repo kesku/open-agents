@@ -8,6 +8,7 @@ import { nanoid } from "nanoid";
 import { deriveAuthUsername } from "@/lib/auth/username";
 import { db } from "@/lib/db/client";
 import * as schema from "@/lib/db/schema";
+import { isLocalDeployment } from "@/lib/deployment/mode";
 
 function normalizeHost(value?: string): string | null {
   if (!value) {
@@ -38,21 +39,27 @@ function getWildcardHostPattern(host: string): string | null {
   return `*.${host}`;
 }
 
-function getAuthBaseURLFallback(): string | undefined {
+function getAuthBaseURLFallback(localDeployment: boolean): string | undefined {
   return (
     process.env.BETTER_AUTH_URL ??
-    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined)
+    (!localDeployment && process.env.VERCEL_URL
+      ? `https://${process.env.VERCEL_URL}`
+      : undefined)
   );
 }
 
-function getAllowedAuthHosts(): string[] {
+function getAllowedAuthHosts(localDeployment: boolean): string[] {
   const hosts = new Set<string>(["localhost:3000", "127.0.0.1:3000"]);
 
   for (const value of [
     process.env.BETTER_AUTH_URL,
-    process.env.VERCEL_URL,
-    process.env.VERCEL_PROJECT_PRODUCTION_URL,
-    process.env.NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL,
+    ...(localDeployment
+      ? []
+      : [
+          process.env.VERCEL_URL,
+          process.env.VERCEL_PROJECT_PRODUCTION_URL,
+          process.env.NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL,
+        ]),
   ]) {
     const host = normalizeHost(value);
     if (!host) {
@@ -92,80 +99,92 @@ function mapGitHubProfileToUser(profile: GithubProfile): { username: string } {
   };
 }
 
-const authBaseURLFallback = getAuthBaseURLFallback();
-const authAllowedHosts = getAllowedAuthHosts();
+function createAuth() {
+  const localDeployment = isLocalDeployment();
+  const authBaseURLFallback = getAuthBaseURLFallback(localDeployment);
+  const authAllowedHosts = getAllowedAuthHosts(localDeployment);
 
-export const auth = betterAuth({
-  secret: process.env.BETTER_AUTH_SECRET,
-  baseURL: {
-    allowedHosts: authAllowedHosts,
-    ...(authBaseURLFallback ? { fallback: authBaseURLFallback } : {}),
-  },
-
-  database: drizzleAdapter(db, {
-    provider: "pg",
-    schema: {
-      users: schema.users,
-      auth_sessions: schema.authSessions,
-      account: schema.accounts,
-      verification: schema.verification,
+  return betterAuth({
+    secret: process.env.BETTER_AUTH_SECRET,
+    baseURL: {
+      allowedHosts: authAllowedHosts,
+      ...(authBaseURLFallback ? { fallback: authBaseURLFallback } : {}),
     },
-  }),
 
-  user: {
-    modelName: "users",
-    fields: {
-      image: "avatarUrl",
-    },
-    additionalFields: {
-      username: { type: "string", required: true },
-      lastLoginAt: { type: "date", required: false },
-    },
-  },
+    database: drizzleAdapter(db, {
+      provider: "pg",
+      schema: {
+        users: schema.users,
+        auth_sessions: schema.authSessions,
+        account: schema.accounts,
+        verification: schema.verification,
+      },
+    }),
 
-  databaseHooks: {
     user: {
-      create: {
-        before: async (user) => ({
-          data: {
-            username: deriveAuthUsername(user),
-          },
-        }),
+      modelName: "users",
+      fields: {
+        image: "avatarUrl",
+      },
+      additionalFields: {
+        username: { type: "string", required: true },
+        lastLoginAt: { type: "date", required: false },
       },
     },
-  },
 
-  session: {
-    modelName: "auth_sessions",
-  },
+    databaseHooks: {
+      user: {
+        create: {
+          before: async (user) => ({
+            data: {
+              username: deriveAuthUsername(user),
+            },
+          }),
+        },
+      },
+    },
 
-  account: {
-    encryptOAuthTokens: true,
-    accountLinking: {
-      enabled: true,
-      trustedProviders: ["vercel", "github"],
-      allowDifferentEmails: true,
+    session: {
+      modelName: "auth_sessions",
     },
-  },
 
-  socialProviders: {
-    vercel: {
-      clientId: process.env.NEXT_PUBLIC_VERCEL_APP_CLIENT_ID ?? "",
-      clientSecret: process.env.VERCEL_APP_CLIENT_SECRET ?? "",
-      scope: ["openid", "email", "profile", "offline_access"],
-      overrideUserInfoOnSignIn: true,
-      mapProfileToUser: mapVercelProfileToUser,
+    emailAndPassword: {
+      enabled: localDeployment,
+      disableSignUp: localDeployment,
     },
-    github: {
-      clientId: process.env.NEXT_PUBLIC_GITHUB_CLIENT_ID ?? "",
-      clientSecret: process.env.GITHUB_CLIENT_SECRET ?? "",
-      mapProfileToUser: mapGitHubProfileToUser,
-    },
-  },
 
-  advanced: {
-    database: {
-      generateId: () => nanoid(),
+    account: {
+      encryptOAuthTokens: true,
+      accountLinking: {
+        enabled: !localDeployment,
+        trustedProviders: localDeployment ? [] : ["vercel", "github"],
+        allowDifferentEmails: !localDeployment,
+      },
     },
-  },
-});
+
+    socialProviders: localDeployment
+      ? {}
+      : {
+          vercel: {
+            clientId: process.env.NEXT_PUBLIC_VERCEL_APP_CLIENT_ID ?? "",
+            clientSecret: process.env.VERCEL_APP_CLIENT_SECRET ?? "",
+            scope: ["openid", "email", "profile", "offline_access"],
+            overrideUserInfoOnSignIn: true,
+            mapProfileToUser: mapVercelProfileToUser,
+          },
+          github: {
+            clientId: process.env.NEXT_PUBLIC_GITHUB_CLIENT_ID ?? "",
+            clientSecret: process.env.GITHUB_CLIENT_SECRET ?? "",
+            mapProfileToUser: mapGitHubProfileToUser,
+          },
+        },
+
+    advanced: {
+      database: {
+        generateId: () => nanoid(),
+      },
+    },
+  });
+}
+
+export const auth = createAuth();

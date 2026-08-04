@@ -2,6 +2,7 @@ import "server-only";
 
 import {
   connectSandbox,
+  destroySandbox,
   type Sandbox,
   type SandboxState,
 } from "@open-agents/sandbox";
@@ -39,6 +40,7 @@ import {
   isSandboxActive,
 } from "@/lib/sandbox/utils";
 import { installGlobalSkills } from "@/lib/skills/global-skill-installer";
+import { getConfiguredSandboxProvider } from "@/lib/sandbox/provider";
 import { eq } from "drizzle-orm";
 
 type UserRecord = {
@@ -69,7 +71,7 @@ function isSandboxState(value: unknown): value is SandboxState {
     typeof value === "object" &&
     value !== null &&
     "type" in value &&
-    value.type === "vercel"
+    (value.type === "vercel" || value.type === "docker")
   );
 }
 
@@ -106,16 +108,19 @@ function buildSandboxSource(session: SessionRecord): SandboxState["source"] {
 
 function buildSandboxState(session: SessionRecord): SandboxState {
   const existingState = session.sandboxState;
+  const type = getConfiguredSandboxProvider();
   const sandboxName =
     getResumableSandboxName(existingState) ?? getSessionSandboxName(session.id);
   const source = buildSandboxSource(session);
 
   return {
-    type: "vercel",
-    ...(isSandboxState(existingState) ? existingState : {}),
+    ...(isSandboxState(existingState) && existingState.type === type
+      ? existingState
+      : {}),
+    type,
     sandboxName,
     ...(source ? { source } : {}),
-  };
+  } as SandboxState;
 }
 
 async function getGitUser(user: UserRecord) {
@@ -193,7 +198,12 @@ async function stopSandboxAfterArchiveRace(params: {
   sandbox: Sandbox;
 }): Promise<never> {
   try {
-    await params.sandbox.stop();
+    const state = params.sandbox.getState?.();
+    if (isSandboxState(state)) {
+      await destroySandbox(state);
+    } else {
+      await params.sandbox.stop();
+    }
   } catch (error) {
     console.error(
       `Failed to stop sandbox after session ${params.sessionId} was archived during provisioning:`,
@@ -231,20 +241,25 @@ export async function provisionSessionSandbox(params: {
     session,
   });
 
+  const requestedState = buildSandboxState(session);
   let sandbox: Sandbox;
   try {
     sandbox = await connectSandbox({
-      state: buildSandboxState(session),
+      state: requestedState,
       options: {
         githubToken: setupToken?.token,
         gitUser,
         timeout: DEFAULT_SANDBOX_TIMEOUT_MS,
-        vcpus: DEFAULT_SANDBOX_VCPUS,
         ports: DEFAULT_SANDBOX_PORTS,
-        baseSnapshotId: DEFAULT_SANDBOX_BASE_SNAPSHOT_ID,
         persistent: true,
         resume: true,
         createIfMissing: true,
+        ...(requestedState.type === "vercel"
+          ? {
+              vcpus: DEFAULT_SANDBOX_VCPUS,
+              baseSnapshotId: DEFAULT_SANDBOX_BASE_SNAPSHOT_ID,
+            }
+          : {}),
       },
     });
   } finally {

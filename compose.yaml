@@ -1,0 +1,123 @@
+name: open-agents
+
+services:
+  traefik:
+    image: traefik:v3.4
+    command:
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --entrypoints.web.address=:80
+      - --ping=true
+      - --log.level=INFO
+    environment:
+      DOCKER_API_VERSION: "1.54"
+    ports:
+      - "${OPEN_AGENTS_HTTP_PORT:-80}:80"
+    volumes:
+      - ${DOCKER_SOCKET_PATH:-/var/run/docker.sock}:/var/run/docker.sock:ro
+    networks:
+      - platform
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:17-bookworm
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-open_agents}
+      POSTGRES_USER: ${POSTGRES_USER:-open_agents}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-open_agents} -d ${POSTGRES_DB:-open_agents}",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks:
+      - platform
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-bookworm
+    command: ["redis-server", "--appendonly", "yes", "--loglevel", "warning"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks:
+      - platform
+    restart: unless-stopped
+
+  sandbox-image:
+    image: ${SANDBOX_IMAGE:-open-agents-sandbox:local}
+    build:
+      context: .
+      dockerfile: docker/sandbox/Dockerfile
+    command: ["true"]
+    networks:
+      - platform
+    restart: "no"
+
+  web:
+    image: ${OPEN_AGENTS_WEB_IMAGE:-open-agents-web:local}
+    build:
+      context: .
+      dockerfile: docker/web/Dockerfile
+    env_file:
+      - path: ${OPEN_AGENTS_ENV_FILE:-./docker/platform.env}
+        required: false
+    environment:
+      OPEN_AGENTS_DEPLOYMENT_MODE: local
+      NEXT_PUBLIC_OPEN_AGENTS_DEPLOYMENT_MODE: local
+      POSTGRES_URL: postgresql://${POSTGRES_USER:-open_agents}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:-open_agents}
+      REDIS_URL: redis://redis:6379
+      WORKFLOW_TARGET_WORLD: "@workflow/world-postgres"
+      WORKFLOW_POSTGRES_URL: postgresql://${POSTGRES_USER:-open_agents}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:-open_agents}
+      WORKFLOW_POSTGRES_JOB_PREFIX: open_agents
+      WORKFLOW_POSTGRES_WORKER_CONCURRENCY: ${WORKFLOW_POSTGRES_WORKER_CONCURRENCY:-10}
+      WORKFLOW_POSTGRES_MAX_POOL_SIZE: ${WORKFLOW_POSTGRES_MAX_POOL_SIZE:-12}
+      SANDBOX_PROVIDER: docker
+      NEXT_PUBLIC_SANDBOX_PROVIDER: docker
+      DOCKER_HOST: unix:///var/run/docker.sock
+      SANDBOX_IMAGE: ${SANDBOX_IMAGE:-open-agents-sandbox:local}
+      SANDBOX_NETWORK: ${SANDBOX_NETWORK:-open-agents}
+      SANDBOX_DOMAIN_SUFFIX: ${SANDBOX_DOMAIN_SUFFIX:-127.0.0.1.sslip.io}
+      SANDBOX_PUBLIC_PROTOCOL: ${SANDBOX_PUBLIC_PROTOCOL:-http}
+      SANDBOX_CONTAINER_CPU: ${SANDBOX_CONTAINER_CPU:-1}
+      SANDBOX_CONTAINER_MEMORY_MB: ${SANDBOX_CONTAINER_MEMORY_MB:-2048}
+      SANDBOX_CONTAINER_PIDS_LIMIT: ${SANDBOX_CONTAINER_PIDS_LIMIT:-512}
+      SANDBOX_MAX_RUNNING: ${SANDBOX_MAX_RUNNING:-8}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      sandbox-image:
+        condition: service_completed_successfully
+    group_add:
+      - "${DOCKER_GID:-0}"
+    volumes:
+      - ${DOCKER_SOCKET_PATH:-/var/run/docker.sock}:/var/run/docker.sock
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: ${SANDBOX_NETWORK:-open-agents}
+      traefik.http.routers.open-agents.rule: Host(`${OPEN_AGENTS_APP_HOST:-openagents.localhost}`)
+      traefik.http.routers.open-agents.entrypoints: web
+      traefik.http.services.open-agents.loadbalancer.server.port: "3000"
+    networks:
+      - platform
+    restart: unless-stopped
+
+networks:
+  platform:
+    name: ${SANDBOX_NETWORK:-open-agents}
+
+volumes:
+  postgres-data:
+  redis-data:

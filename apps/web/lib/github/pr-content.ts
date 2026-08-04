@@ -1,5 +1,4 @@
 import type { Sandbox } from "@open-agents/sandbox";
-import { gateway } from "@open-agents/agent";
 import { generateText, NoObjectGeneratedError, Output } from "ai";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
@@ -9,6 +8,8 @@ import { db } from "@/lib/db/client";
 import { getChatsBySessionId, getSessionById } from "@/lib/db/sessions";
 import { users } from "@/lib/db/schema";
 import { SAFE_BRANCH_PATTERN } from "@/lib/git/helpers";
+import { getHelperLanguageModel } from "@/lib/model-runtime";
+import { isLocalDeployment } from "@/lib/deployment/mode";
 
 const prContentSchema = z.object({
   title: z
@@ -53,13 +54,21 @@ function escapeMarkdownText(value: string): string {
 export function resolvePullRequestAppBaseUrl(
   appBaseUrl?: string,
 ): string | null {
-  const candidates = [
+  const hostedCandidates = [
     appBaseUrl,
     process.env.VERCEL_URL,
     process.env.VERCEL_ENV === "production"
       ? process.env.NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL
       : null,
   ];
+  const candidates = isLocalDeployment()
+    ? [
+        appBaseUrl,
+        process.env.APP_URL,
+        process.env.BETTER_AUTH_URL,
+        ...hostedCandidates.slice(1),
+      ]
+    : hostedCandidates;
 
   for (const candidate of candidates) {
     const normalized = normalizePullRequestAppBaseUrl(candidate);
@@ -139,6 +148,7 @@ export function appendPullRequestContextSection(
 
 export interface GeneratePullRequestContentParams {
   sandbox: Sandbox;
+  userId: string;
   sessionId: string;
   sessionTitle: string;
   baseBranch: string;
@@ -301,7 +311,7 @@ export async function generatePullRequestContentFromSandbox(
   let prContent: z.infer<typeof prContentSchema>;
   try {
     const { output } = await generateText({
-      model: gateway("anthropic/claude-haiku-4.5"),
+      model: await getHelperLanguageModel(params.userId),
       output: Output.object({
         schema: prContentSchema,
       }),

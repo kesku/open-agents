@@ -1,4 +1,5 @@
 import { getVercelProjectLinkByRepo } from "@/lib/db/vercel-project-links";
+import { isLocalDeployment } from "@/lib/deployment/mode";
 import { getServerSession } from "@/lib/session/get-server-session";
 import {
   isVercelInvalidTokenError,
@@ -7,6 +8,10 @@ import {
 import { getUserVercelToken } from "@/lib/vercel/token";
 
 export async function GET(req: Request) {
+  if (isLocalDeployment()) {
+    return Response.json({ error: "Not found" }, { status: 404 });
+  }
+
   const session = await getServerSession();
   if (!session?.user) {
     return Response.json({ error: "Not authenticated" }, { status: 401 });

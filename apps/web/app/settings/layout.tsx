@@ -108,15 +108,21 @@ function SettingsLayout({
   children,
   pathname,
   isAdmin,
+  localDeployment,
 }: {
   children: React.ReactNode;
   pathname: string;
   isAdmin: boolean;
+  localDeployment: boolean;
 }) {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
-  const sidebarItems = isAdmin
-    ? [...baseSidebarItems, adminSidebarItem]
+  const visibleSidebarItems = localDeployment
+    ? baseSidebarItems.filter((item) => item.id !== "leaderboard")
     : baseSidebarItems;
+  const sidebarItems =
+    isAdmin && !localDeployment
+      ? [...visibleSidebarItems, adminSidebarItem]
+      : visibleSidebarItems;
   const activeItem = sidebarItems.find((item) => item.href === pathname);
 
   const navItems = (
@@ -233,7 +239,8 @@ function SettingsLayout({
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const { isAdmin } = useSession();
+  const { isAdmin, session } = useSession();
+  const localDeployment = session?.authProvider === "local";
   const activeItem = baseSidebarItems.find((item) => item.href === pathname);
   const fallbackTitle = activeItem?.label ?? "Profile";
   const fallbackContent =
@@ -252,13 +259,21 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   return (
     <AuthGuard
       loadingFallback={
-        <SettingsLayout pathname={pathname} isAdmin={false}>
+        <SettingsLayout
+          pathname={pathname}
+          isAdmin={false}
+          localDeployment={localDeployment}
+        >
           <h1 className="text-2xl font-semibold">{fallbackTitle}</h1>
           {fallbackContent}
         </SettingsLayout>
       }
     >
-      <SettingsLayout pathname={pathname} isAdmin={isAdmin}>
+      <SettingsLayout
+        pathname={pathname}
+        isAdmin={isAdmin}
+        localDeployment={localDeployment}
+      >
         {children}
       </SettingsLayout>
     </AuthGuard>

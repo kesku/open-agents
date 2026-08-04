@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth/config";
 import { getServerSession } from "@/lib/session/get-server-session";
 import { getUserVercelToken } from "@/lib/vercel/token";
+import { isLocalDeployment } from "@/lib/deployment/mode";
 
 const VERCEL_REVOKE_URL = "https://api.vercel.com/login/oauth/token/revoke";
 
@@ -35,7 +36,7 @@ async function getRevocableVercelToken(userId: string): Promise<string | null> {
 export async function signOut(): Promise<void> {
   const session = await getServerSession();
 
-  if (session?.user?.id) {
+  if (!isLocalDeployment() && session?.user?.id) {
     try {
       const clientId = process.env.NEXT_PUBLIC_VERCEL_APP_CLIENT_ID;
       const clientSecret = process.env.VERCEL_APP_CLIENT_SECRET;

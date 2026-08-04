@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { isLocalDeployment } from "@/lib/deployment/mode";
 
 const DEPLOY_ENV_VARS = [
   "POSTGRES_URL",
@@ -62,6 +64,10 @@ export const metadata: Metadata = {
 };
 
 export default function DeployYourOwnPage() {
+  if (isLocalDeployment()) {
+    notFound();
+  }
+
   return (
     <main className="flex min-h-screen items-center justify-center bg-background px-6 py-24 text-foreground">
       <div className="flex max-w-xl flex-col items-center text-center">

@@ -16,6 +16,10 @@ function getReconnectDescription(
   reason: GitHubConnectionReason | null,
 ): string {
   switch (reason) {
+    case "local_token_invalid":
+      return "GitHub rejected LOCAL_GITHUB_ACCESS_TOKEN. Update the server environment with a valid token and restart Open Agents.";
+    case "local_github_unavailable":
+      return "Open Agents could not reach GitHub to validate the server-managed token. Check GitHub availability and this server's network connection.";
     case "installations_missing":
       return "GitHub no longer reports your app installation. This usually happens after app permission changes or an installation being invalidated.";
     case "sync_auth_failed":
@@ -34,19 +38,32 @@ export function GitHubReconnectDialog({
   open: boolean;
   reason: GitHubConnectionReason | null;
 }) {
+  const localTokenProblem =
+    reason === "local_token_invalid" || reason === "local_github_unavailable";
+
   return (
     <Dialog open={open}>
       <DialogContent showCloseButton={false}>
         <DialogHeader>
-          <DialogTitle>Reconnect GitHub</DialogTitle>
+          <DialogTitle>
+            {localTokenProblem
+              ? "GitHub connection needs attention"
+              : "Reconnect GitHub"}
+          </DialogTitle>
           <DialogDescription>
-            {getReconnectDescription(reason)} Reconnect now to restore
-            repository access and keep using the app.
+            {getReconnectDescription(reason)}
+            {localTokenProblem
+              ? " Repository access will resume after the server restarts with the updated environment."
+              : " Reconnect now to restore repository access and keep using the app."}
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>
           <Button asChild>
-            <Link href="/settings/connections">Reconnect GitHub</Link>
+            <Link href="/settings/connections">
+              {localTokenProblem
+                ? "Open connection settings"
+                : "Reconnect GitHub"}
+            </Link>
           </Button>
         </DialogFooter>
       </DialogContent>

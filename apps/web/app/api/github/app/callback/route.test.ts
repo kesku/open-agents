@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
 
 let authSession: { user: { id: string } } | null;
 let cookieValues: Record<string, string>;
@@ -40,6 +40,15 @@ mock.module("@/lib/github/sync", () => ({
 }));
 
 const routeModulePromise = import("./route");
+const originalDeploymentMode = process.env.OPEN_AGENTS_DEPLOYMENT_MODE;
+
+afterAll(() => {
+  if (originalDeploymentMode === undefined) {
+    delete process.env.OPEN_AGENTS_DEPLOYMENT_MODE;
+  } else {
+    process.env.OPEN_AGENTS_DEPLOYMENT_MODE = originalDeploymentMode;
+  }
+});
 
 function getRedirectUrl(response: Response): URL {
   const location = response.headers.get("location");
@@ -49,6 +58,7 @@ function getRedirectUrl(response: Response): URL {
 
 describe("GET /api/github/app/callback", () => {
   beforeEach(() => {
+    process.env.OPEN_AGENTS_DEPLOYMENT_MODE = "vercel";
     authSession = { user: { id: "user-1" } };
     cookieValues = {
       github_app_install_redirect_to: "/settings/connections",

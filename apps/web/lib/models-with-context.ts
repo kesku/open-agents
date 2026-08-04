@@ -1,14 +1,18 @@
 import "server-only";
 
+import type { OpenAICompatibleProviderConfig } from "@open-agents/agent";
 import { gateway } from "ai";
 import { z } from "zod";
+import { getModelProviderRuntimeConfigs } from "./db/model-providers";
 import { filterDisabledModels } from "./model-availability";
+import { isDirectModelProvidersEnabled } from "./model-provider-access";
 import type {
   AvailableModel,
   AvailableModelCost,
   AvailableModelCostTier,
   GatewayAvailableModel,
 } from "./models";
+import { fetchOpenAICompatibleLanguageModels } from "./openai-compatible-models";
 
 const MODELS_DEV_URL = "https://models.dev/api.json";
 const MODELS_DEV_TIMEOUT_MS = 750;
@@ -215,20 +219,54 @@ async function fetchGatewayModels(): Promise<GatewayModel[]> {
   }
 }
 
-export async function fetchAvailableLanguageModels(): Promise<
-  AvailableModel[]
-> {
-  const models = await fetchGatewayModels();
+function dedupeModels(models: AvailableModel[]): AvailableModel[] {
+  const modelsById = new Map<string, AvailableModel>();
+  for (const model of models) {
+    modelsById.set(model.id, model);
+  }
+  return [...modelsById.values()];
+}
+
+async function getRuntimeProviders(
+  userId?: string,
+): Promise<OpenAICompatibleProviderConfig[]> {
+  return userId ? getModelProviderRuntimeConfigs(userId) : [];
+}
+
+export async function fetchAvailableLanguageModels(
+  userId?: string,
+): Promise<AvailableModel[]> {
+  const providers = await getRuntimeProviders(userId);
+  const [gatewayResult, customModels] = await Promise.all([
+    fetchGatewayModels().then(
+      (models) => ({ success: true as const, models }),
+      (error: unknown) => ({ success: false as const, error }),
+    ),
+    fetchOpenAICompatibleLanguageModels(providers),
+  ]);
+
+  if (
+    !gatewayResult.success &&
+    providers.length === 0 &&
+    !isDirectModelProvidersEnabled()
+  ) {
+    throw gatewayResult.error;
+  }
+
+  const gatewayModels = gatewayResult.success ? gatewayResult.models : [];
   return filterDisabledModels(
-    models.filter((model) => model.modelType === "language"),
+    dedupeModels([
+      ...gatewayModels.filter((model) => model.modelType === "language"),
+      ...customModels,
+    ]),
   );
 }
 
-export async function fetchAvailableLanguageModelsWithContext(): Promise<
-  AvailableModel[]
-> {
+export async function fetchAvailableLanguageModelsWithContext(
+  userId?: string,
+): Promise<AvailableModel[]> {
   const [models, modelsDevMetadataMap] = await Promise.all([
-    fetchAvailableLanguageModels(),
+    fetchAvailableLanguageModels(userId),
     fetchModelsDevMetadataMap(),
   ]);
 

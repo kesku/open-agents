@@ -47,8 +47,8 @@ mock.module("ai", () => ({
   generateText: async () => generateTextResult,
 }));
 
-mock.module("@open-agents/agent", () => ({
-  gateway: () => "mock-model",
+mock.module("@/lib/model-runtime", () => ({
+  getHelperLanguageModel: async () => "mock-model",
 }));
 
 mock.module("@open-agents/sandbox", () => ({

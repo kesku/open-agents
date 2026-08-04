@@ -13,12 +13,20 @@ const requestedUrls: string[] = [];
 
 let gatewayError: unknown = null;
 let modelsDevApiData: unknown = {};
+let customProviderModelsApiData: unknown = {};
+let customProviders: Array<{
+  id: string;
+  name: string;
+  baseURL: string;
+  apiKey: string;
+}> = [];
 let currentSession: {
   authProvider?: "vercel" | "github";
   user: { id: string; email?: string; username?: string; avatar?: string };
 } | null = null;
 
 const originalFetch = globalThis.fetch;
+const originalDeploymentMode = process.env.OPEN_AGENTS_DEPLOYMENT_MODE;
 
 function getRequestUrl(input: RequestInfo | URL): string {
   if (typeof input === "string") {
@@ -48,10 +56,19 @@ mock.module("@/lib/session/get-server-session", () => ({
   getServerSession: async () => currentSession,
 }));
 
+mock.module("@/lib/db/model-providers", () => ({
+  getModelProviderRuntimeConfigs: async () => customProviders,
+}));
+
 const routeModulePromise = import("./route");
 
 afterEach(() => {
   globalThis.fetch = originalFetch;
+  if (originalDeploymentMode === undefined) {
+    delete process.env.OPEN_AGENTS_DEPLOYMENT_MODE;
+  } else {
+    process.env.OPEN_AGENTS_DEPLOYMENT_MODE = originalDeploymentMode;
+  }
 });
 
 describe("/api/models context window enrichment", () => {
@@ -60,15 +77,26 @@ describe("/api/models context window enrichment", () => {
     requestedUrls.length = 0;
     gatewayError = null;
     modelsDevApiData = {};
+    customProviderModelsApiData = {};
+    customProviders = [];
     currentSession = null;
+    process.env.OPEN_AGENTS_DEPLOYMENT_MODE = "local";
 
     globalThis.fetch = mock((input: RequestInfo | URL, _init?: RequestInit) => {
-      requestedUrls.push(getRequestUrl(input));
+      const requestUrl = getRequestUrl(input);
+      requestedUrls.push(requestUrl);
       return Promise.resolve(
-        new Response(JSON.stringify(modelsDevApiData), {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        }),
+        new Response(
+          JSON.stringify(
+            requestUrl === "https://models.dev/api.json"
+              ? modelsDevApiData
+              : customProviderModelsApiData,
+          ),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          },
+        ),
       );
     }) as unknown as typeof fetch;
   });
@@ -303,5 +331,69 @@ describe("/api/models context window enrichment", () => {
         modelType: "language",
       },
     ]);
+  });
+
+  test("discovers per-user provider models when AI Gateway is unavailable", async () => {
+    currentSession = {
+      authProvider: "github",
+      user: { id: "user-1", email: "person@example.com" },
+    };
+    gatewayError = new Error("AI Gateway is not configured");
+    customProviders = [
+      {
+        id: "openrouter",
+        name: "OpenRouter",
+        baseURL: "https://openrouter.ai/api/v1",
+        apiKey: "or-key",
+      },
+    ];
+    customProviderModelsApiData = {
+      data: [
+        { id: "google/gemini-2.5-pro", name: "Gemini 2.5 Pro" },
+        { id: "text-embedding-3-small" },
+      ],
+    };
+
+    const { GET } = await routeModulePromise;
+    const response = await GET(new Request("http://localhost/api/models"));
+    const body = (await response.json()) as {
+      models: Array<{ id: string; name: string }>;
+    };
+
+    expect(response.ok).toBe(true);
+    expect(body.models).toEqual([
+      expect.objectContaining({
+        id: "openrouter/google/gemini-2.5-pro",
+        name: "Gemini 2.5 Pro",
+      }),
+    ]);
+    expect(requestedUrls).toContain("https://openrouter.ai/api/v1/models");
+  });
+
+  test("returns an empty catalog locally when no model backend is configured", async () => {
+    currentSession = {
+      authProvider: "github",
+      user: { id: "user-1", email: "person@example.com" },
+    };
+    gatewayError = new Error("AI Gateway is not configured");
+
+    const { GET } = await routeModulePromise;
+    const response = await GET(new Request("http://localhost/api/models"));
+    const body = (await response.json()) as { models: unknown[] };
+
+    expect(response.ok).toBe(true);
+    expect(body.models).toEqual([]);
+  });
+
+  test("preserves Gateway discovery failure semantics for hosted deployments", async () => {
+    process.env.OPEN_AGENTS_DEPLOYMENT_MODE = "vercel";
+    gatewayError = new Error("AI Gateway is not configured");
+
+    const { GET } = await routeModulePromise;
+    const response = await GET(
+      new Request("https://open-agents.dev/api/models"),
+    );
+
+    expect(response.status).toBe(500);
   });
 });

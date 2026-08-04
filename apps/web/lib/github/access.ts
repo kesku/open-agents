@@ -1,6 +1,8 @@
 import { getInstallationByAccountLogin } from "@/lib/db/installations";
+import { isLocalDeployment } from "@/lib/deployment/mode";
 import { withScopedInstallationOctokit } from "./app";
 import { getUserOctokit } from "./client";
+import { LOCAL_GITHUB_INSTALLATION_ID } from "./local";
 
 export type RepoAccessDeniedReason =
   | "no_user_token"
@@ -94,6 +96,15 @@ export async function verifyRepoAccess(params: {
       return { ok: false, reason: "user_no_access" };
     }
     throw error;
+  }
+
+  if (isLocalDeployment()) {
+    return {
+      ok: true,
+      installationId: LOCAL_GITHUB_INSTALLATION_ID,
+      repositoryId,
+      defaultBranch,
+    };
   }
 
   // 2. check installation exists for this owner

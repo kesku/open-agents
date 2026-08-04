@@ -9,6 +9,7 @@ import { syncUserInstallations } from "@/lib/github/sync";
 import { isManagedTemplateTrialUser } from "@/lib/managed-template-trial";
 import { sanitizeInternalRedirect } from "@/lib/redirect-safety";
 import { getServerSession } from "@/lib/session/get-server-session";
+import { isLocalDeployment } from "@/lib/deployment/mode";
 
 /**
  * After better-auth completes the GitHub OAuth link, it redirects here.
@@ -18,6 +19,10 @@ export async function GET(req: Request): Promise<Response> {
   const session = await getServerSession();
   if (!session?.user?.id) {
     return NextResponse.redirect(new URL("/", req.url));
+  }
+
+  if (isLocalDeployment()) {
+    return NextResponse.redirect(new URL("/settings/connections", req.url));
   }
 
   const requestUrl = new URL(req.url);

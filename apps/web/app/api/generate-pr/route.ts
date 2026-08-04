@@ -208,6 +208,7 @@ export async function POST(req: Request) {
 
   const prContentResult = await generatePullRequestContentFromSandbox({
     sandbox,
+    userId: session.user.id,
     sessionId,
     sessionTitle,
     baseBranch,

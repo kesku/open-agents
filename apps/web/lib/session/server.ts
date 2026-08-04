@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import type { Session } from "./types";
 import { auth } from "@/lib/auth/config";
+import { isLocalDeployment } from "@/lib/deployment/mode";
 
 function extractUsername(user: {
   name?: string | null;
@@ -25,7 +26,7 @@ export async function getSessionFromReq(
 
   return {
     created: baSession.session.createdAt.getTime(),
-    authProvider: "vercel",
+    authProvider: isLocalDeployment() ? "local" : "vercel",
     user: {
       id: baSession.user.id,
       username: extractUsername(baSession.user),

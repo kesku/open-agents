@@ -18,7 +18,7 @@ export function ProfileSectionSkeleton() {
       <CardHeader>
         <CardTitle>Profile</CardTitle>
         <CardDescription>
-          Your profile information is synced from Vercel.
+          Your profile information is loaded from the configured account.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -65,7 +65,9 @@ export function ProfileSection() {
       <CardHeader>
         <CardTitle>Profile</CardTitle>
         <CardDescription>
-          Your profile information is synced from Vercel.
+          {session.authProvider === "local"
+            ? "Your profile is managed by this local deployment."
+            : "Your profile information is synced from Vercel."}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">

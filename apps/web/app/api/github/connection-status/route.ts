@@ -8,12 +8,42 @@ import {
 import { getUserGitHubToken } from "@/lib/github/token";
 import { getGitHubUsername, hasGitHubAccount } from "@/lib/github/users";
 import { getServerSession } from "@/lib/session/get-server-session";
+import { isLocalDeployment } from "@/lib/deployment/mode";
+import {
+  getLocalGitHubToken,
+  validateLocalGitHubToken,
+} from "@/lib/github/local";
 
 export async function GET() {
   const session = await getServerSession();
 
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+  }
+
+  if (isLocalDeployment()) {
+    const token = getLocalGitHubToken();
+    if (!token) {
+      return NextResponse.json({
+        status: "not_connected",
+        reason: null,
+        hasInstallations: false,
+        syncedInstallationsCount: 0,
+      } satisfies GitHubConnectionStatusResponse);
+    }
+
+    const validation = await validateLocalGitHubToken();
+    const connected = validation.status === "valid";
+    return NextResponse.json({
+      status: connected ? "connected" : "reconnect_required",
+      reason: connected
+        ? null
+        : validation.status === "invalid"
+          ? "local_token_invalid"
+          : "local_github_unavailable",
+      hasInstallations: connected,
+      syncedInstallationsCount: connected ? 1 : null,
+    } satisfies GitHubConnectionStatusResponse);
   }
 
   const [linked, installations] = await Promise.all([

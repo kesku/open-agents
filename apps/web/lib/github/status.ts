@@ -6,7 +6,9 @@ export type GitHubConnectionStatus =
 export type GitHubConnectionReason =
   | "token_unavailable"
   | "installations_missing"
-  | "sync_auth_failed";
+  | "sync_auth_failed"
+  | "local_token_invalid"
+  | "local_github_unavailable";
 
 export interface GitHubConnectionStatusResponse {
   status: GitHubConnectionStatus;

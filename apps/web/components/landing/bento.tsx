@@ -14,8 +14,8 @@ const items: readonly BentoItem[] = [
   },
   {
     id: "002",
-    title: "AI Gateway",
-    body: "Route requests across providers with built-in fallbacks, rate limiting, and observability.",
+    title: "Model Providers",
+    body: "Use direct OpenAI-compatible providers or route through AI Gateway with the same agent runtime.",
   },
   {
     id: "003",
@@ -81,8 +81,8 @@ export function LandingBento() {
           </div>
           <div className="md:pl-10">
             <p className="max-w-md text-balance text-base leading-relaxed text-(--l-fg-2)">
-              Built on production-grade primitives from the Vercel ecosystem. No
-              synthetic demos &mdash; real infrastructure for real agents.
+              Built for real agent work, not synthetic demos &mdash; sandboxes,
+              workflows, and model providers you can run locally or host.
             </p>
             <div className="mt-6">
               <SignInButton />

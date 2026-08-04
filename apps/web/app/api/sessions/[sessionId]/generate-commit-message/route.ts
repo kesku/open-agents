@@ -1,8 +1,9 @@
 import { connectSandbox } from "@open-agents/sandbox";
-import { gateway, generateText } from "ai";
+import { generateText } from "ai";
 import { checkBotProtection } from "@/lib/botid";
 import { getSessionById } from "@/lib/db/sessions";
 import { checkRateLimit, rateLimitKey } from "@/lib/rate-limit";
+import { getHelperLanguageModel } from "@/lib/model-runtime";
 import { isSandboxActive } from "@/lib/sandbox/utils";
 import { getServerSession } from "@/lib/session/get-server-session";
 
@@ -57,7 +58,7 @@ export async function POST(
   }
 
   const result = await generateText({
-    model: gateway("anthropic/claude-haiku-4.5"),
+    model: await getHelperLanguageModel(session.user.id),
     prompt: `Generate a concise git commit message for these changes. Use conventional commit format (e.g., "feat:", "fix:", "refactor:"). One line only, max 72 characters.
 
 Session context: ${dbSession.title}

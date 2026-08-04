@@ -2,6 +2,8 @@ import { describe, expect, mock, test } from "bun:test";
 
 const initBotIdCalls: unknown[] = [];
 
+process.env.NEXT_PUBLIC_OPEN_AGENTS_DEPLOYMENT_MODE = "vercel";
+
 mock.module("botid/client/core", () => ({
   initBotId: (config: unknown) => {
     initBotIdCalls.push(config);

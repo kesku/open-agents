@@ -39,6 +39,7 @@ mock.module("@/lib/github/sync", () => ({
 const routeModulePromise = import("./route");
 
 const originalEnv = {
+  OPEN_AGENTS_DEPLOYMENT_MODE: process.env.OPEN_AGENTS_DEPLOYMENT_MODE,
   NEXT_PUBLIC_GITHUB_APP_SLUG: process.env.NEXT_PUBLIC_GITHUB_APP_SLUG,
   NODE_ENV: process.env.NODE_ENV,
 };
@@ -65,6 +66,7 @@ describe("GET /api/github/app/install", () => {
     installations = [{ installationId: 1 }];
 
     Object.assign(process.env, {
+      OPEN_AGENTS_DEPLOYMENT_MODE: "vercel",
       NEXT_PUBLIC_GITHUB_APP_SLUG: "open-agents",
       NODE_ENV: "test",
     });
@@ -72,6 +74,7 @@ describe("GET /api/github/app/install", () => {
 
   afterEach(() => {
     Object.assign(process.env, {
+      OPEN_AGENTS_DEPLOYMENT_MODE: originalEnv.OPEN_AGENTS_DEPLOYMENT_MODE,
       NEXT_PUBLIC_GITHUB_APP_SLUG: originalEnv.NEXT_PUBLIC_GITHUB_APP_SLUG,
       NODE_ENV: originalEnv.NODE_ENV,
     });

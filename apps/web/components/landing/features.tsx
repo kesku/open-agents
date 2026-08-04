@@ -79,19 +79,19 @@ export function LandingFeatures() {
             bullets={[
               "File ops, search, shell, and task delegation built in",
               "Explorer and executor subagents for parallel work",
-              "Multi-model support with AI Gateway",
+              "Direct model providers or AI Gateway",
             ]}
             window={<FeatureAgent />}
           />
 
           <Spotlight
             tone="ash"
-            title="Cloud sandboxes, not local machines."
-            description="Every session runs in an isolated Vercel sandbox with its own branch. Work is committed and pushed automatically — nothing is lost when the sandbox expires."
+            title="Isolated sandboxes, not your working tree."
+            description="Every session runs in an isolated sandbox with its own branch. Work can be committed and pushed automatically, and the sandbox can hibernate without losing the workspace."
             bullets={[
-              "Ephemeral environments with full git integration",
+              "Isolated environments with full git integration",
               "Auto-hibernate on inactivity, instant restore",
-              "Snapshot and restore filesystem state",
+              "Persistent workspace state across restarts",
             ]}
             flip
             window={<FeatureSandbox />}

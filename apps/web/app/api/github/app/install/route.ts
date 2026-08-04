@@ -11,6 +11,7 @@ import {
 import { isManagedTemplateTrialUser } from "@/lib/managed-template-trial";
 import { sanitizeInternalRedirect } from "@/lib/redirect-safety";
 import { getServerSession } from "@/lib/session/get-server-session";
+import { isLocalDeployment } from "@/lib/deployment/mode";
 
 const COOKIE_OPTIONS = {
   path: "/",
@@ -45,6 +46,10 @@ export async function GET(req: NextRequest): Promise<Response> {
 
   if (!session?.user?.id) {
     return NextResponse.redirect(new URL("/", req.url));
+  }
+
+  if (isLocalDeployment()) {
+    return NextResponse.redirect(new URL("/settings/connections", req.url));
   }
 
   if (isManagedTemplateTrialUser(session, req.url)) {

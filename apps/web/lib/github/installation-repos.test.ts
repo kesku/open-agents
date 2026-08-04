@@ -1,20 +1,23 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
-import { listUserInstallationRepositories } from "./repos";
+import {
+  listLocalGitHubRepositories,
+  listUserInstallationRepositories,
+} from "./repos";
 
 const originalFetch = globalThis.fetch;
 
-function createRepository(name: string, updatedAt: string) {
+function createRepository(name: string, updatedAt: string, owner = "acme") {
   return {
     name,
-    full_name: `acme/${name}`,
+    full_name: `${owner}/${name}`,
     description: null,
     private: false,
     clone_url: `https://github.com/acme/${name}.git`,
     updated_at: updatedAt,
     language: null,
     owner: {
-      login: "acme",
+      login: owner,
     },
   };
 }
@@ -129,5 +132,31 @@ describe("installation-repos", () => {
 
     expect(repos.map((repo) => repo.name)).toEqual(["docs-site", "docs"]);
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  test("lists PAT-visible repositories for the selected local account", async () => {
+    const fetchMock = mock(async (input: RequestInfo | URL) => {
+      const url = new URL(input.toString());
+      expect(url.pathname).toBe("/user/repos");
+      expect(url.searchParams.get("affiliation")).toBe(
+        "owner,collaborator,organization_member",
+      );
+
+      return Response.json([
+        createRepository("api", "2024-01-01T00:00:00Z"),
+        createRepository("web-app", "2024-03-01T00:00:00Z"),
+        createRepository("web-docs", "2024-02-01T00:00:00Z", "other"),
+      ]);
+    });
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const repos = await listLocalGitHubRepositories({
+      userToken: "github_pat_local",
+      owner: "acme",
+      query: "web",
+    });
+
+    expect(repos.map((repo) => repo.full_name)).toEqual(["acme/web-app"]);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });

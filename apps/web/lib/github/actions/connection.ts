@@ -5,6 +5,7 @@ import { deleteInstallationsByUserId } from "@/lib/db/installations";
 import { deleteGitHubAccountLink, hasGitHubAccount } from "@/lib/github/users";
 import { getUserGitHubToken } from "@/lib/github/token";
 import { getServerSession } from "@/lib/session/get-server-session";
+import { isLocalDeployment } from "@/lib/deployment/mode";
 
 export async function unlinkGitHub(): Promise<{
   success: boolean;
@@ -13,6 +14,14 @@ export async function unlinkGitHub(): Promise<{
   const session = await getServerSession();
   if (!session?.user?.id) {
     return { success: false, error: "Not authenticated" };
+  }
+
+  if (isLocalDeployment()) {
+    return {
+      success: false,
+      error:
+        "GitHub is managed by LOCAL_GITHUB_ACCESS_TOKEN in this deployment.",
+    };
   }
 
   try {

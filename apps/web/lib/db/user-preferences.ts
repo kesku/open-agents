@@ -4,6 +4,10 @@ import type { SandboxType } from "@/components/sandbox-selector-compact";
 import { modelVariantsSchema, type ModelVariant } from "@/lib/model-variants";
 import { APP_DEFAULT_MODEL_ID } from "@/lib/models";
 import {
+  getConfiguredSandboxProvider,
+  isSandboxProviderType,
+} from "@/lib/sandbox/provider";
+import {
   normalizeGlobalSkillRefs,
   type GlobalSkillRef,
 } from "@/lib/skills/global-skill-refs";
@@ -30,7 +34,7 @@ export interface UserPreferencesData {
 const DEFAULT_PREFERENCES: UserPreferencesData = {
   defaultModelId: APP_DEFAULT_MODEL_ID,
   defaultSubagentModelId: null,
-  defaultSandboxType: "vercel",
+  defaultSandboxType: getConfiguredSandboxProvider(),
   defaultDiffMode: "unified",
   autoCommitPush: false,
   autoCreatePr: false,
@@ -42,19 +46,15 @@ const DEFAULT_PREFERENCES: UserPreferencesData = {
   enabledModelIds: [],
 };
 
-const VALID_SANDBOX_TYPES: SandboxType[] = ["vercel"];
 const VALID_DIFF_MODES: DiffMode[] = ["unified", "split"];
 
 function normalizeSandboxType(value: unknown): SandboxType {
-  if (value === "hybrid") {
-    return "vercel";
-  }
+  const normalizedValue = value === "hybrid" ? "vercel" : value;
 
-  if (
-    typeof value === "string" &&
-    VALID_SANDBOX_TYPES.includes(value as SandboxType)
-  ) {
-    return value as SandboxType;
+  if (isSandboxProviderType(normalizedValue)) {
+    return normalizedValue === getConfiguredSandboxProvider()
+      ? normalizedValue
+      : DEFAULT_PREFERENCES.defaultSandboxType;
   }
 
   return DEFAULT_PREFERENCES.defaultSandboxType;

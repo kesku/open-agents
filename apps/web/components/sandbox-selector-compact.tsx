@@ -15,8 +15,14 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
+import {
+  getConfiguredSandboxProvider,
+  getSandboxProviderDescription,
+  getSandboxProviderLabel,
+  type SandboxProviderType,
+} from "@/lib/sandbox/provider";
 
-export type SandboxType = "vercel";
+export type SandboxType = SandboxProviderType;
 
 interface SandboxOption {
   id: SandboxType;
@@ -24,15 +30,15 @@ interface SandboxOption {
   description: string;
 }
 
+export const DEFAULT_SANDBOX_TYPE: SandboxType = getConfiguredSandboxProvider();
+
 export const SANDBOX_OPTIONS: SandboxOption[] = [
   {
-    id: "vercel",
-    name: "Vercel",
-    description: "Cloud sandbox",
+    id: DEFAULT_SANDBOX_TYPE,
+    name: getSandboxProviderLabel(DEFAULT_SANDBOX_TYPE),
+    description: getSandboxProviderDescription(DEFAULT_SANDBOX_TYPE),
   },
 ];
-
-export const DEFAULT_SANDBOX_TYPE: SandboxType = "vercel";
 
 interface SandboxSelectorCompactProps {
   value: SandboxType;

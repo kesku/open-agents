@@ -1,4 +1,5 @@
 import { initBotId } from "botid/client/core";
+import { isLocalDeploymentClient } from "@/lib/deployment/mode";
 
 export const botIdProtectedRoutes = [
   // AI text-generation endpoints
@@ -21,6 +22,8 @@ export const botIdProtectedRoutes = [
  *
  * @see https://vercel.com/docs/botid/get-started
  */
-initBotId({
-  protect: botIdProtectedRoutes,
-});
+if (!isLocalDeploymentClient()) {
+  initBotId({
+    protect: botIdProtectedRoutes,
+  });
+}

@@ -2,12 +2,15 @@ import {
   createGateway,
   defaultSettingsMiddleware,
   wrapLanguageModel,
-  type GatewayModelId,
+  type GatewayModelId as AiGatewayModelId,
   type JSONValue,
   type LanguageModel,
 } from "ai";
 import type { AnthropicLanguageModelOptions } from "@ai-sdk/anthropic";
-import type { OpenAIResponsesProviderOptions } from "@ai-sdk/openai";
+import {
+  createOpenAI,
+  type OpenAIResponsesProviderOptions,
+} from "@ai-sdk/openai";
 
 function supportsAdaptiveAnthropicThinking(modelId: string): boolean {
   return modelId.includes("4.6") || modelId.includes("4.7");
@@ -92,14 +95,25 @@ export interface GatewayConfig {
   apiKey: string;
 }
 
+export interface OpenAICompatibleProviderConfig {
+  id: string;
+  name: string;
+  baseURL: string;
+  apiKey?: string;
+}
+
 export interface GatewayOptions {
   config?: GatewayConfig;
   providerOptionsOverrides?: ProviderOptionsByProvider;
+  openAICompatibleProviders?: OpenAICompatibleProviderConfig[];
   appName?: string;
   appUrl?: string;
 }
 
-export type { GatewayModelId, LanguageModel, JSONValue };
+// User-configured providers may expose model ids outside the Gateway catalog.
+export type GatewayModelId = string;
+
+export type { LanguageModel, JSONValue };
 
 export function shouldApplyOpenAIReasoningDefaults(modelId: string): boolean {
   return modelId.startsWith("openai/gpt-5");
@@ -169,31 +183,101 @@ export function getProviderOptionsForModel(
   return providerOptions;
 }
 
+function splitModelId(modelId: string): {
+  providerId: string;
+  providerModelId: string;
+} {
+  const slashIndex = modelId.indexOf("/");
+  if (slashIndex <= 0 || slashIndex === modelId.length - 1) {
+    throw new Error(
+      `Invalid model id "${modelId}". Expected "provider/model".`,
+    );
+  }
+
+  return {
+    providerId: modelId.slice(0, slashIndex),
+    providerModelId: modelId.slice(slashIndex + 1),
+  };
+}
+
+function getOpenAICompatibleProviderOptions(
+  providerId: string,
+  modelId: string,
+  providerOptionsOverrides?: ProviderOptionsByProvider,
+): ProviderOptionsByProvider {
+  if (providerId === "openai") {
+    return getProviderOptionsForModel(modelId, providerOptionsOverrides);
+  }
+
+  const customProviderOptions = providerOptionsOverrides?.[providerId];
+  const explicitOpenAIOptions = providerOptionsOverrides?.openai;
+  if (!customProviderOptions && !explicitOpenAIOptions) {
+    return {};
+  }
+
+  return {
+    openai: mergeRecords(
+      customProviderOptions ?? {},
+      explicitOpenAIOptions ?? {},
+    ),
+  };
+}
+
 export function gateway(
   modelId: GatewayModelId,
   options: GatewayOptions = {},
 ): LanguageModel {
-  const { config, providerOptionsOverrides, appName, appUrl } = options;
+  const {
+    config,
+    providerOptionsOverrides,
+    openAICompatibleProviders = [],
+    appName,
+    appUrl,
+  } = options;
+  const { providerId, providerModelId } = splitModelId(modelId);
+  const openAICompatibleProvider = openAICompatibleProviders.find(
+    (provider) => provider.id === providerId,
+  );
 
   const attributionHeaders = {
     "http-referer": appUrl ?? "https://open-agents.dev",
     "x-title": appName ?? "Open Agents",
   };
 
-  const baseGateway = config
-    ? createGateway({
-        baseURL: config.baseURL,
-        apiKey: config.apiKey,
-        headers: attributionHeaders,
-      })
-    : createGateway({ headers: attributionHeaders });
+  let model: LanguageModel;
+  let providerOptions: ProviderOptionsByProvider;
 
-  let model: LanguageModel = baseGateway(modelId);
+  if (openAICompatibleProvider) {
+    const provider = createOpenAI({
+      name: openAICompatibleProvider.id,
+      baseURL: openAICompatibleProvider.baseURL,
+      // OpenAI SDK requires a non-empty apiKey even for keyless local servers.
+      apiKey: openAICompatibleProvider.apiKey || "open-agents-keyless",
+    });
+    model =
+      providerId === "openai"
+        ? provider.responses(providerModelId)
+        : provider.chat(providerModelId);
+    providerOptions = getOpenAICompatibleProviderOptions(
+      providerId,
+      modelId,
+      providerOptionsOverrides,
+    );
+  } else {
+    const baseGateway = config
+      ? createGateway({
+          baseURL: config.baseURL,
+          apiKey: config.apiKey,
+          headers: attributionHeaders,
+        })
+      : createGateway({ headers: attributionHeaders });
 
-  const providerOptions = getProviderOptionsForModel(
-    modelId,
-    providerOptionsOverrides,
-  );
+    model = baseGateway(modelId as AiGatewayModelId);
+    providerOptions = getProviderOptionsForModel(
+      modelId,
+      providerOptionsOverrides,
+    );
+  }
 
   if (Object.keys(providerOptions).length > 0) {
     model = wrapLanguageModel({

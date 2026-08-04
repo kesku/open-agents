@@ -305,7 +305,11 @@ export async function commitChanges(params: {
     commitMessage = normalizedTitle.slice(0, 72);
   } else {
     const diff = await getStagedDiff(sandbox);
-    commitMessage = await generateCommitMessage(diff, sessionTitle);
+    commitMessage = await generateCommitMessage(
+      diff,
+      sessionTitle,
+      session.user.id,
+    );
   }
 
   const access = await verifyRepoAccess({

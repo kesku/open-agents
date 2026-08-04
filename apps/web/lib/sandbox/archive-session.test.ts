@@ -104,6 +104,9 @@ const spies = {
 
     return sandbox;
   }),
+  destroySandbox: mock(async (): Promise<void> => {
+    throw new Error("sandbox destroy failed");
+  }),
   getUserGitHubToken: mock(async () => "repo-token"),
   getPullRequestStatus: mock(
     async (): Promise<MockPullRequestStatusResult> => ({
@@ -125,6 +128,7 @@ mock.module("@/lib/db/sessions", () => ({
 
 mock.module("@open-agents/sandbox", () => ({
   connectSandbox: spies.connectSandbox,
+  destroySandbox: spies.destroySandbox,
 }));
 
 mock.module("@/lib/github/token", () => ({
@@ -187,10 +191,13 @@ beforeEach(() => {
   spies.findPullRequest.mockImplementation(async () => ({
     found: false,
   }));
+  spies.destroySandbox.mockImplementation(async () => {
+    throw new Error("sandbox destroy failed");
+  });
 });
 
 describe("archiveSession", () => {
-  test("clears runtime sandbox state when archive finalization fails without a snapshot", async () => {
+  test("preserves runtime state when provider destruction fails", async () => {
     const { archiveSession } = await archiveSessionModulePromise;
 
     let backgroundTask: Promise<void> | null = null;
@@ -219,17 +226,16 @@ describe("archiveSession", () => {
       lifecycleState: "archived",
       sandboxExpiresAt: null,
       hibernateAfter: null,
-      lifecycleError: "Archive finalization failed: sandbox connection failed",
-      sandboxState: {
+      lifecycleError: "Archive finalization failed: sandbox destroy failed",
+    });
+    expect(recoveryPatch?.sandboxState).toBeUndefined();
+
+    expect(sessionRecord?.sandboxState).toEqual(
+      expect.objectContaining({
         type: "vercel",
         sandboxName: "session_session-1",
-      },
-    });
-
-    expect(sessionRecord?.sandboxState).toEqual({
-      type: "vercel",
-      sandboxName: "session_session-1",
-    });
+      }),
+    );
   });
 
   test("preserves runtime sandbox state when archive finalization fails but snapshot already exists", async () => {
@@ -260,7 +266,7 @@ describe("archiveSession", () => {
     const recoveryPatch = updateCalls[1]?.[1];
 
     expect(recoveryPatch?.lifecycleError).toBe(
-      "Archive finalization failed: sandbox connection failed",
+      "Archive finalization failed: sandbox destroy failed",
     );
     expect(recoveryPatch?.sandboxState).toBeUndefined();
     expect(sessionRecord?.sandboxState).toEqual(
@@ -274,7 +280,8 @@ describe("archiveSession", () => {
   test("refreshes merged PR status before archiving", async () => {
     const { archiveSession } = await archiveSessionModulePromise;
 
-    sandboxQueue = [createMockSandbox(), createMockSandbox()];
+    sandboxQueue = [createMockSandbox()];
+    spies.destroySandbox.mockImplementation(async () => {});
     spies.getPullRequestStatus.mockImplementation(async () => ({
       success: true,
       status: "merged",
@@ -304,6 +311,12 @@ describe("archiveSession", () => {
       prStatus: "merged",
     });
     expect(spies.findPullRequest).not.toHaveBeenCalled();
+    expect(spies.destroySandbox).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "vercel",
+        sandboxName: "session_session-1",
+      }),
+    );
     expect(sessionRecord?.prStatus).toBe("merged");
   });
 });

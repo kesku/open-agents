@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
 
 let getAccessTokenResult: { accessToken?: string | null } | null;
 let getAccessTokenError: Error | null;
@@ -38,9 +38,26 @@ mock.module("@/lib/db/schema", () => ({
 }));
 
 const tokenModulePromise = import("./token");
+const originalDeploymentMode = process.env.OPEN_AGENTS_DEPLOYMENT_MODE;
+const originalLocalGitHubToken = process.env.LOCAL_GITHUB_ACCESS_TOKEN;
+
+afterAll(() => {
+  if (originalDeploymentMode === undefined) {
+    delete process.env.OPEN_AGENTS_DEPLOYMENT_MODE;
+  } else {
+    process.env.OPEN_AGENTS_DEPLOYMENT_MODE = originalDeploymentMode;
+  }
+  if (originalLocalGitHubToken === undefined) {
+    delete process.env.LOCAL_GITHUB_ACCESS_TOKEN;
+  } else {
+    process.env.LOCAL_GITHUB_ACCESS_TOKEN = originalLocalGitHubToken;
+  }
+});
 
 describe("getUserGitHubToken", () => {
   beforeEach(() => {
+    process.env.OPEN_AGENTS_DEPLOYMENT_MODE = "vercel";
+    delete process.env.LOCAL_GITHUB_ACCESS_TOKEN;
     getAccessTokenSpy.mockClear();
     getAccessTokenResult = { accessToken: "ghu_test" };
     getAccessTokenError = null;
@@ -66,10 +83,23 @@ describe("getUserGitHubToken", () => {
 
     expect(token).toBeNull();
   });
+
+  test("uses the configured local token without calling better-auth", async () => {
+    process.env.OPEN_AGENTS_DEPLOYMENT_MODE = "local";
+    process.env.LOCAL_GITHUB_ACCESS_TOKEN = "github_pat_local";
+    const { getUserGitHubToken } = await tokenModulePromise;
+
+    const token = await getUserGitHubToken("user-1");
+
+    expect(token).toBe("github_pat_local");
+    expect(getAccessTokenSpy).not.toHaveBeenCalled();
+  });
 });
 
 describe("getGitHubAppUserToken", () => {
   beforeEach(() => {
+    process.env.OPEN_AGENTS_DEPLOYMENT_MODE = "vercel";
+    delete process.env.LOCAL_GITHUB_ACCESS_TOKEN;
     getAccessTokenSpy.mockClear();
     getAccessTokenResult = { accessToken: "ghu_test" };
     getAccessTokenError = null;

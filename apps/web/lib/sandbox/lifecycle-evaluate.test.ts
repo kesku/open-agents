@@ -14,7 +14,7 @@ interface TestSessionRecord {
     | "archived"
     | "failed";
   sandboxState: {
-    type: "vercel";
+    type: "vercel" | "docker";
     sandboxName: string;
     expiresAt: number;
   };
@@ -55,7 +55,9 @@ mock.module("@open-agents/sandbox", () => ({
 
 const { evaluateSandboxLifecycle } = await import("./lifecycle");
 
-function makeDueSession(): TestSessionRecord {
+function makeDueSession(
+  provider: TestSessionRecord["sandboxState"]["type"] = "vercel",
+): TestSessionRecord {
   const nowMs = Date.now();
 
   return {
@@ -63,7 +65,7 @@ function makeDueSession(): TestSessionRecord {
     status: "running",
     lifecycleState: "active",
     sandboxState: {
-      type: "vercel",
+      type: provider,
       sandboxName: "session_session-1",
       expiresAt: nowMs + 5 * 60_000,
     },
@@ -169,7 +171,8 @@ describe("evaluateSandboxLifecycle", () => {
     expect(finalPatch).not.toHaveProperty("hibernateAfter");
   });
 
-  test("hibernates by stopping the persistent sandbox session", async () => {
+  test("hibernates a Docker sandbox while retaining its persistent handle", async () => {
+    sessionRecord = makeDueSession("docker");
     const result = await evaluateSandboxLifecycle(
       "session-1",
       "status-check-overdue",
@@ -190,7 +193,7 @@ describe("evaluateSandboxLifecycle", () => {
         snapshotUrl: null,
         snapshotCreatedAt: null,
         sandboxState: {
-          type: "vercel",
+          type: "docker",
           sandboxName: "session_session-1",
         },
       }),

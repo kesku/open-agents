@@ -15,6 +15,7 @@ export type { Source, FileEntry, SandboxStatus } from "./types.ts";
 // factory
 export {
   connectSandbox,
+  destroySandbox,
   type SandboxState,
   type ConnectOptions,
   type SandboxConnectConfig,

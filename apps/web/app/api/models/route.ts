@@ -6,10 +6,10 @@ const CACHE_CONTROL = "private, no-store";
 
 export async function GET(req: Request) {
   try {
-    const [session, models] = await Promise.all([
-      getServerSession(),
-      fetchAvailableLanguageModelsWithContext(),
-    ]);
+    const session = await getServerSession();
+    const models = await fetchAvailableLanguageModelsWithContext(
+      session?.user.id,
+    );
 
     return Response.json(
       { models: filterModelsForSession(models, session, req.url) },

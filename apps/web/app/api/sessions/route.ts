@@ -20,6 +20,10 @@ import {
 } from "@/lib/github/urls";
 import { checkRateLimit, rateLimitKey } from "@/lib/rate-limit";
 import { kickSandboxProvisioningWorkflow } from "@/lib/sandbox/provisioning-kick";
+import {
+  getConfiguredSandboxProvider,
+  type SandboxProviderType,
+} from "@/lib/sandbox/provider";
 import { getRandomCityName } from "@/lib/random-city";
 import { getServerSession } from "@/lib/session/get-server-session";
 import {
@@ -45,7 +49,7 @@ interface CreateSessionRequest {
   branch?: string;
   cloneUrl?: string;
   isNewBranch?: boolean;
-  sandboxType?: "vercel";
+  sandboxType?: SandboxProviderType;
   autoCommitPush?: boolean;
   autoCreatePr?: boolean;
   vercelProject?: VercelProjectSelection | null;
@@ -219,7 +223,8 @@ export async function POST(req: Request) {
     );
   }
 
-  if (body.sandboxType && body.sandboxType !== "vercel") {
+  const configuredSandboxProvider = getConfiguredSandboxProvider();
+  if (body.sandboxType && body.sandboxType !== configuredSandboxProvider) {
     return Response.json({ error: "Invalid sandbox type" }, { status: 400 });
   }
 
@@ -301,7 +306,7 @@ export async function POST(req: Request) {
     branch,
     cloneUrl,
     isNewBranch,
-    sandboxType = "vercel",
+    sandboxType = configuredSandboxProvider,
     autoCommitPush,
     autoCreatePr,
   } = body;
@@ -317,7 +322,7 @@ export async function POST(req: Request) {
 
     let resolvedVercelProject: VercelProjectSelection | null = null;
     const hasRepo = Boolean(repoOwner && repoName);
-    if (hasRepo && repoOwner && repoName) {
+    if (sandboxType === "vercel" && hasRepo && repoOwner && repoName) {
       if (explicitVercelProject) {
         const vercelToken = await getUserVercelToken(session.user.id);
         if (!vercelToken) {

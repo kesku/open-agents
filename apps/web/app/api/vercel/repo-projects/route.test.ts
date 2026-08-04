@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
 import type { VercelProjectSelection } from "@/lib/vercel/types";
 
 let currentSession: { user: { id: string } } | null = {
@@ -8,6 +8,8 @@ let currentToken: string | null = "token";
 let savedLink: VercelProjectSelection | null = null;
 let projects: VercelProjectSelection[] = [];
 let projectsError: Error | null = null;
+const originalServerMode = process.env.OPEN_AGENTS_DEPLOYMENT_MODE;
+const originalPublicMode = process.env.NEXT_PUBLIC_OPEN_AGENTS_DEPLOYMENT_MODE;
 
 mock.module("@/lib/session/get-server-session", () => ({
   getServerSession: async () => currentSession,
@@ -34,13 +36,43 @@ mock.module("@/lib/vercel/projects", () => ({
 
 const routeModulePromise = import("./route");
 
+afterAll(() => {
+  if (originalServerMode === undefined) {
+    delete process.env.OPEN_AGENTS_DEPLOYMENT_MODE;
+  } else {
+    process.env.OPEN_AGENTS_DEPLOYMENT_MODE = originalServerMode;
+  }
+  if (originalPublicMode === undefined) {
+    delete process.env.NEXT_PUBLIC_OPEN_AGENTS_DEPLOYMENT_MODE;
+  } else {
+    process.env.NEXT_PUBLIC_OPEN_AGENTS_DEPLOYMENT_MODE = originalPublicMode;
+  }
+});
+
 describe("/api/vercel/repo-projects", () => {
   beforeEach(() => {
+    process.env.OPEN_AGENTS_DEPLOYMENT_MODE = "vercel";
+    process.env.NEXT_PUBLIC_OPEN_AGENTS_DEPLOYMENT_MODE = "vercel";
     currentSession = { user: { id: "user-1" } };
     currentToken = "token";
     savedLink = null;
     projects = [];
     projectsError = null;
+  });
+
+  test("is unavailable in local deployments", async () => {
+    process.env.OPEN_AGENTS_DEPLOYMENT_MODE = "local";
+    process.env.NEXT_PUBLIC_OPEN_AGENTS_DEPLOYMENT_MODE = "local";
+    const { GET } = await routeModulePromise;
+
+    const response = await GET(
+      new Request(
+        "http://localhost/api/vercel/repo-projects?repoOwner=vercel&repoName=open-agents",
+      ),
+    );
+
+    expect(response.status).toBe(404);
+    expect(await response.json()).toEqual({ error: "Not found" });
   });
 
   test("returns the remembered default when it still exists in live candidates", async () => {

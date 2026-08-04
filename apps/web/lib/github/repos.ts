@@ -31,6 +31,13 @@ export interface InstallationRepository {
   language: string | null;
 }
 
+interface ListLocalRepositoriesOptions {
+  userToken: string;
+  owner: string;
+  query?: string;
+  limit?: number;
+}
+
 interface ListUserInstallationRepositoriesOptions {
   installationId: number;
   userToken: string;
@@ -143,6 +150,76 @@ export async function listUserInstallationRepositories({
 
   matchedRepos.sort(compareRepositoriesByRecentActivity);
 
+  return matchedRepos.slice(0, normalizedLimit).map((repo) => ({
+    name: repo.name,
+    full_name: repo.full_name,
+    description: repo.description,
+    private: repo.private,
+    clone_url: repo.clone_url,
+    updated_at: repo.updated_at,
+    language: repo.language,
+  }));
+}
+
+/** List repositories visible to the local GitHub token for one owner. */
+export async function listLocalGitHubRepositories({
+  userToken,
+  owner,
+  query,
+  limit,
+}: ListLocalRepositoriesOptions): Promise<InstallationRepository[]> {
+  const ownerFilter = owner.trim().toLowerCase();
+  const queryFilter = query?.trim().toLowerCase();
+  const normalizedLimit = normalizeLimit(limit);
+  const matchedRepos: z.infer<typeof installationRepoSchema>[] = [];
+
+  for (let page = 1; page <= INSTALLATION_REPOS_MAX_PAGES; page++) {
+    const endpoint = new URL("https://api.github.com/user/repos");
+    endpoint.searchParams.set(
+      "affiliation",
+      "owner,collaborator,organization_member",
+    );
+    endpoint.searchParams.set("sort", "updated");
+    endpoint.searchParams.set("direction", "desc");
+    endpoint.searchParams.set("per_page", "100");
+    endpoint.searchParams.set("page", String(page));
+
+    const response = await fetch(endpoint, {
+      headers: {
+        Authorization: `Bearer ${userToken}`,
+        Accept: "application/vnd.github.v3+json",
+      },
+      cache: "no-store",
+    });
+    if (!response.ok) {
+      const body = await response.text();
+      throw new Error(
+        `Failed to fetch local GitHub repositories: ${response.status} ${body}`,
+      );
+    }
+
+    const parsed = z
+      .array(installationRepoSchema)
+      .safeParse(await response.json());
+    if (!parsed.success) {
+      throw new Error("Invalid local GitHub repositories response");
+    }
+
+    const pageMatches = parsed.data.filter(
+      (repo) =>
+        repo.owner.login.toLowerCase() === ownerFilter &&
+        (!queryFilter ||
+          repo.name.toLowerCase().includes(queryFilter) ||
+          repo.full_name.toLowerCase().includes(queryFilter)),
+    );
+    matchedRepos.push(...pageMatches);
+
+    if (matchedRepos.length >= normalizedLimit || parsed.data.length < 100) {
+      break;
+    }
+  }
+
+  matchedRepos.sort(compareRepositoriesByRecentActivity);
   return matchedRepos.slice(0, normalizedLimit).map((repo) => ({
     name: repo.name,
     full_name: repo.full_name,

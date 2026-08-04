@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getInstallationByUserAndId } from "@/lib/db/installations";
-import { listUserInstallationRepositories } from "@/lib/github/repos";
+import { isLocalDeployment } from "@/lib/deployment/mode";
+import { listLocalGitHubAccounts } from "@/lib/github/local";
+import {
+  listLocalGitHubRepositories,
+  listUserInstallationRepositories,
+} from "@/lib/github/repos";
 import { getUserGitHubToken } from "@/lib/github/token";
 import { getServerSession } from "@/lib/session/get-server-session";
 
@@ -43,17 +48,6 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const installation = await getInstallationByUserAndId(
-    session.user.id,
-    installationId,
-  );
-  if (!installation) {
-    return NextResponse.json(
-      { error: "Installation not found" },
-      { status: 403 },
-    );
-  }
-
   const userToken = await getUserGitHubToken(session.user.id);
   if (!userToken) {
     return NextResponse.json(
@@ -63,6 +57,38 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    if (isLocalDeployment()) {
+      const accounts = await listLocalGitHubAccounts();
+      const account = accounts.find(
+        (candidate) => candidate.githubId === installationId,
+      );
+      if (!account) {
+        return NextResponse.json(
+          { error: "GitHub account not found" },
+          { status: 403 },
+        );
+      }
+
+      const repos = await listLocalGitHubRepositories({
+        userToken,
+        owner: account.login,
+        query,
+        limit,
+      });
+      return NextResponse.json(repos);
+    }
+
+    const installation = await getInstallationByUserAndId(
+      session.user.id,
+      installationId,
+    );
+    if (!installation) {
+      return NextResponse.json(
+        { error: "Installation not found" },
+        { status: 403 },
+      );
+    }
+
     const repos = await listUserInstallationRepositories({
       installationId,
       userToken,

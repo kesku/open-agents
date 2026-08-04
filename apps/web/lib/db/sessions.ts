@@ -30,8 +30,8 @@ export function normalizeLegacySandboxState(
         ? state.sandboxId
         : undefined;
 
-  if (normalizedType !== "vercel") {
-    return sandboxState as SandboxState;
+  if (normalizedType !== "vercel" && normalizedType !== "docker") {
+    return undefined;
   }
 
   if (normalizedType === state.type && sandboxName === undefined) {

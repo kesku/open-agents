@@ -1,6 +1,7 @@
 import { checkBotProtection } from "@/lib/botid";
-import { gateway, generateText } from "ai";
+import { generateText } from "ai";
 import { z } from "zod";
+import { getHelperLanguageModel } from "@/lib/model-runtime";
 import { checkRateLimit, rateLimitKey } from "@/lib/rate-limit";
 import { getServerSession } from "@/lib/session/get-server-session";
 
@@ -12,13 +13,14 @@ import { getServerSession } from "@/lib/session/get-server-session";
  */
 export async function generateSessionTitle(
   message: string,
+  userId: string,
 ): Promise<string | null> {
   const trimmed = message.trim().slice(0, 2000);
   if (trimmed.length === 0) return null;
 
   try {
     const result = await generateText({
-      model: gateway("anthropic/claude-haiku-4.5"),
+      model: await getHelperLanguageModel(userId),
       prompt: `You are a developer tool that names coding sessions. Generate a concise title (max 5 words) for a coding session based on the user's first message below. The title should help the user quickly identify what this session is about at a glance. Do NOT use quotes or punctuation around the title. Respond with ONLY the title, nothing else.
 
 User message:
@@ -78,7 +80,7 @@ export async function POST(req: Request) {
 
   const { message } = parsedBody.data;
 
-  const title = await generateSessionTitle(message);
+  const title = await generateSessionTitle(message, session.user.id);
 
   if (!title) {
     return Response.json(

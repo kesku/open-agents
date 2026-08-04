@@ -1,6 +1,7 @@
 import { headers } from "next/headers";
 import { cache } from "react";
 import { auth } from "@/lib/auth/config";
+import { isLocalDeployment } from "@/lib/deployment/mode";
 import type { Session } from "./types";
 
 function extractUsername(user: {
@@ -25,7 +26,7 @@ export const getServerSession = cache(
 
     return {
       created: baSession.session.createdAt.getTime(),
-      authProvider: "vercel",
+      authProvider: isLocalDeployment() ? "local" : "vercel",
       user: {
         id: baSession.user.id,
         username: extractUsername(baSession.user),

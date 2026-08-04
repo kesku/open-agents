@@ -1,5 +1,5 @@
 import { generateText } from "ai";
-import { gateway } from "@open-agents/agent";
+import { getHelperLanguageModel } from "@/lib/model-runtime";
 
 export const SAFE_BRANCH_PATTERN = /^[\w\-/.]+$/;
 
@@ -51,13 +51,14 @@ export function looksLikeCommitHash(str: string): boolean {
 export async function generateCommitMessage(
   diff: string,
   sessionTitle: string,
+  userId: string,
 ): Promise<string> {
   const fallback = "chore: update repository changes";
   if (!diff.trim()) return fallback;
 
   try {
     const result = await generateText({
-      model: gateway("anthropic/claude-haiku-4.5"),
+      model: await getHelperLanguageModel(userId),
       prompt: `Generate a concise git commit message for these changes. Use conventional commit format (e.g., "feat:", "fix:", "refactor:"). One line only, max 72 characters.
 
 Session context: ${sessionTitle}

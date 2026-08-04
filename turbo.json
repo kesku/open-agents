@@ -4,7 +4,10 @@
     "build": {
       "dependsOn": ["^build"],
       "env": [
+        "AI_GATEWAY_API_KEY",
+        "APP_URL",
         "BETTER_AUTH_SECRET",
+        "BETTER_AUTH_URL",
         "BLOB_READ_WRITE_TOKEN",
         "ENCRYPTION_KEY",
         "GITHUB_CLIENT_SECRET",
@@ -13,12 +16,26 @@
         "KV_REST_API_TOKEN",
         "KV_REST_API_URL",
         "KV_URL",
+        "LOCAL_AUTH_EMAIL",
+        "LOCAL_AUTH_NAME",
+        "LOCAL_AUTH_PASSWORD",
+        "LOCAL_AUTH_USERNAME",
+        "LOCAL_GITHUB_ACCESS_TOKEN",
         "NEXT_PUBLIC_AUTH_PROVIDERS",
         "NEXT_PUBLIC_GITHUB_CLIENT_ID",
+        "NEXT_PUBLIC_OPEN_AGENTS_DEPLOYMENT_MODE",
+        "NEXT_PUBLIC_SANDBOX_PROVIDER",
         "NEXT_PUBLIC_VERCEL_APP_CLIENT_ID",
+        "OPEN_AGENTS_DEPLOYMENT_MODE",
         "POSTGRES_URL",
         "REDIS_URL",
-        "VERCEL_APP_CLIENT_SECRET"
+        "SANDBOX_PROVIDER",
+        "VERCEL_APP_CLIENT_SECRET",
+        "WORKFLOW_POSTGRES_JOB_PREFIX",
+        "WORKFLOW_POSTGRES_MAX_POOL_SIZE",
+        "WORKFLOW_POSTGRES_URL",
+        "WORKFLOW_POSTGRES_WORKER_CONCURRENCY",
+        "WORKFLOW_TARGET_WORLD"
       ],
       "outputs": ["dist/**"]
     },

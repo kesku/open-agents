@@ -1,236 +1,173 @@
 # Open Agents
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?project-name=open-agents&repository-name=open-agents&repository-url=https%3A%2F%2Fgithub.com%2Fvercel-labs%2Fopen-agents&demo-title=Open+Agents&demo-description=Open-source+reference+app+for+building+and+running+background+coding+agents+on+Vercel.&demo-url=https%3A%2F%2Fopen-agents.dev%2F&env=POSTGRES_URL%2CBETTER_AUTH_SECRET%2CNEXT_PUBLIC_VERCEL_APP_CLIENT_ID%2CVERCEL_APP_CLIENT_SECRET%2CNEXT_PUBLIC_GITHUB_CLIENT_ID%2CGITHUB_CLIENT_SECRET%2CGITHUB_APP_ID%2CGITHUB_APP_PRIVATE_KEY%2CNEXT_PUBLIC_GITHUB_APP_SLUG%2CGITHUB_WEBHOOK_SECRET&envDescription=Neon+can+provide+POSTGRES_URL+automatically.+Generate+BETTER_AUTH_SECRET+yourself%2C+then+add+your+Vercel+OAuth+and+GitHub+App+credentials+for+a+full+deployment.&products=%255B%257B%2522type%2522%253A%2522integration%2522%252C%2522protocol%2522%253A%2522storage%2522%252C%2522productSlug%2522%253A%2522neon%2522%252C%2522integrationSlug%2522%253A%2522neon%2522%257D%252C%257B%2522type%2522%253A%2522integration%2522%252C%2522protocol%2522%253A%2522storage%2522%252C%2522productSlug%2522%253A%2522upstash-kv%2522%252C%2522integrationSlug%2522%253A%2522upstash%2522%257D%255D&skippable-integrations=1)
+Open Agents is an open-source app for running coding agents locally or on Vercel. It includes the web UI, agent runtime, sandbox orchestration, and GitHub integration needed to go from a prompt to code changes.
 
-Open Agents is an open-source reference app for building and running background coding agents on Vercel. It includes the web UI, the agent runtime, sandbox orchestration, and the GitHub integration needed to go from prompt to code changes without keeping your laptop involved.
+By default it runs in local mode with Docker Compose: Postgres, Redis, Docker sandboxes, email/password auth for one owner account, a GitHub personal access token for repo access, and optional OpenAI-compatible model providers. Hosted Vercel auth, GitHub App, Sandbox, Workflow, BotID, and Analytics stay available when you set `OPEN_AGENTS_DEPLOYMENT_MODE=vercel`.
 
-The repo is meant to be forked and adapted, not treated as a black box.
-
-## What it is
-
-Open Agents is a three-layer system:
+## Architecture
 
 ```text
-Web -> Agent workflow -> Sandbox VM
+Browser -> Next.js app -> Workflow -> agent -> sandbox
+                |              |                 |
+          Postgres + Redis   Postgres      Docker or Vercel
 ```
 
-- The web app handles auth, sessions, chat, and streaming UI.
-- The agent runs as a durable workflow on Vercel.
-- The sandbox is the execution environment: filesystem, shell, git, dev servers, and preview ports.
+The agent does not run inside the sandbox. It runs in the app process (via Workflow) and uses tools to read files, edit code, run commands, and inspect Git state. GitHub writes go through the app with Octokit. Clone and fetch credentials are injected only for those operations, then cleared.
 
-### The key architectural decision: the agent is not the sandbox
+## Self-host with Docker Compose
 
-The agent does not run inside the VM. It runs outside the sandbox and interacts with it through tools like file reads, edits, search, and shell commands.
+Requirements:
 
-That separation is the main point of the project:
+- Docker Engine and Docker Compose v2
+- a host with at least 4 GB of memory for the first web and sandbox containers
+- a GitHub personal access token if you want repository access
 
-- agent execution is not tied to a single request lifecycle
-- sandbox lifecycle can hibernate and resume independently
-- model/provider choices and sandbox implementation can evolve separately
-- the VM stays a plain execution environment instead of becoming the control plane
+Create the deployment configuration:
 
-## Current capabilities
+```bash
+cp docker/platform.env.example docker/platform.env
+openssl rand -base64 32 # use for BETTER_AUTH_SECRET
+openssl rand -hex 32    # use for ENCRYPTION_KEY
+```
 
-- chat-driven coding agent with file, search, shell, task, skill, and web tools
-- durable multi-step execution with Workflow SDK-backed runs, streaming, and cancellation
-- isolated Vercel sandboxes with snapshot-based resume
-- repo cloning and branch work inside the sandbox
-- optional auto-commit, push, and PR creation after a successful run
-- session sharing via read-only links
-- optional voice input via ElevenLabs transcription
+Edit `docker/platform.env` and set:
 
-## Runtime notes
+- `POSTGRES_PASSWORD`
+- `BETTER_AUTH_SECRET`
+- `LOCAL_AUTH_EMAIL` and `LOCAL_AUTH_PASSWORD`
+- `ENCRYPTION_KEY`
+- `LOCAL_GITHUB_ACCESS_TOKEN` when repository access is needed
+- `DOCKER_GID` to `stat -c %g /var/run/docker.sock` on Linux
 
-A few details that matter for understanding the current implementation:
+A fine-grained GitHub token should be limited to the repositories Open Agents may use. Grant Metadata read access, Contents read/write access, and Pull requests read/write access when the agent should be able to push branches and open PRs.
 
-- Chat requests start a workflow run instead of executing the agent inline.
-- Each agent turn can continue across many persisted workflow steps.
-- Active runs can be resumed by reconnecting to the stream for the existing workflow.
-- Sandboxes expose ports `3000`, `5173`, `4321`, and `8000`, can optionally use a configured base snapshot, and hibernate after inactivity.
-- Auto-commit and auto-PR are supported, but they are preference-driven features, not always-on behavior.
+Build and start the stack:
 
-## Environment variables
+```bash
+docker compose --env-file docker/platform.env up --build -d
+```
 
-See `apps/web/.env.example` for the full list. Summary:
+Open `http://openagents.localhost` and sign in with the configured owner credentials. On startup the web container applies migrations, sets up Workflow tables, creates the owner account if needed, and starts the app.
 
-### Minimum runtime
+The Compose stack contains:
+
+- `web`: Next.js app and Workflow worker
+- `postgres`: application data and Workflow tables
+- `redis`: rate limiting and shared cache/stream state
+- `sandbox-image`: Node 24/Bun image used for agent containers
+- `traefik`: app route and per-sandbox preview routes
+
+Application and sandbox data survive container restarts in Postgres, Redis, and Docker named volumes. Archiving a session destroys its sandbox container and workspace volume.
+
+### Docker socket access
+
+The web service needs a Docker Engine API to create agent containers. Mounting the host Docker socket gives that service broad host access; agent containers never receive the socket. For an internet-facing deployment, point `DOCKER_SOCKET_PATH` at a dedicated rootless Docker daemon socket, or otherwise keep the engine away from unrelated host workloads.
+
+Agent containers run as an unprivileged user, with dropped capabilities and CPU, memory, and PID limits. GitHub credentials are not stored in their environment, labels, Git config, remotes, or sandbox state.
+
+### Remote hosts and preview URLs
+
+The defaults use `127.0.0.1.sslip.io` and plain HTTP for machine-local previews. For a remote deployment, set:
 
 ```env
-POSTGRES_URL=
-BETTER_AUTH_SECRET=
+SANDBOX_DOMAIN_SUFFIX=sandboxes.example.com
+SANDBOX_PUBLIC_PROTOCOL=https
+OPEN_AGENTS_APP_HOST=agents.example.com
+APP_URL=https://agents.example.com
+BETTER_AUTH_URL=https://agents.example.com
 ```
 
-### Required for sign-in (Vercel OAuth)
+Configure wildcard DNS and TLS for `*.sandboxes.example.com` at the reverse proxy.
+
+## Local development
+
+Install Node 24, Corepack/pnpm, Bun, Postgres, Redis, and Docker. Then:
+
+```bash
+corepack enable
+pnpm install
+cp apps/web/.env.example apps/web/.env
+```
+
+Fill the required local values in `apps/web/.env`, create the databases, then initialize the services:
+
+```bash
+pnpm --dir apps/web db:migrate:apply
+pnpm --dir apps/web workflow:setup
+pnpm --dir apps/web auth:bootstrap
+pnpm web
+```
+
+The Next.js instrumentation hook starts the configured Workflow World. `WORKFLOW_TARGET_WORLD=@workflow/world-postgres` needs a long-running process, which both `pnpm web` and the Compose web service provide.
+
+## Configuration
+
+See `apps/web/.env.example` for the full development configuration and `docker/platform.env.example` for the Compose secrets.
+
+Core local values:
 
 ```env
-NEXT_PUBLIC_VERCEL_APP_CLIENT_ID=
-VERCEL_APP_CLIENT_SECRET=
+OPEN_AGENTS_DEPLOYMENT_MODE=local
+NEXT_PUBLIC_OPEN_AGENTS_DEPLOYMENT_MODE=local
+POSTGRES_URL=postgresql://...
+REDIS_URL=redis://...
+BETTER_AUTH_URL=http://localhost:3000
+BETTER_AUTH_SECRET=...
+LOCAL_AUTH_EMAIL=owner@example.com
+LOCAL_AUTH_PASSWORD=...
+LOCAL_GITHUB_ACCESS_TOKEN=...
+WORKFLOW_TARGET_WORLD=@workflow/world-postgres
+WORKFLOW_POSTGRES_URL=postgresql://...
+SANDBOX_PROVIDER=docker
+NEXT_PUBLIC_SANDBOX_PROVIDER=docker
+ENCRYPTION_KEY=...
 ```
 
-### Required for GitHub repo access, pushes, and PRs
+Keep `LOCAL_GITHUB_ACCESS_TOKEN` and model-provider keys server-only. Do not give them a `NEXT_PUBLIC_` prefix.
 
-```env
-NEXT_PUBLIC_GITHUB_CLIENT_ID=
-GITHUB_CLIENT_SECRET=
-GITHUB_APP_ID=
-GITHUB_APP_PRIVATE_KEY=
-NEXT_PUBLIC_GITHUB_APP_SLUG=
-GITHUB_WEBHOOK_SECRET=
-```
+## Model providers
 
-### Optional
+Add OpenAI-compatible providers in Settings with a provider ID, API base URL, and API key. Keys are encrypted with AES-256-GCM in Postgres, never returned by the settings API, and loaded only inside execution steps so they are not stored as Workflow arguments or results.
 
-```env
-REDIS_URL=
-KV_URL=
-OPEN_AGENTS_RESOURCE_PROFILE=
-VERCEL_PROJECT_PRODUCTION_URL=
-NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL=
-VERCEL_SANDBOX_BASE_SNAPSHOT_ID=
-ELEVENLABS_API_KEY=
-```
+Set `AI_GATEWAY_API_KEY` only if you also want the Vercel AI Gateway catalog and fallback. A configured direct provider can run chat, title generation, commit messages, checks fixes, and PR content without Gateway credentials.
 
-- `REDIS_URL` / `KV_URL`: optional skills metadata cache (falls back to in-memory when not configured).
-- `OPEN_AGENTS_RESOURCE_PROFILE`: optional deployment resource profile. Set to `hobby` to use Hobby-compatible defaults for chat and sandbox resources; leave unset for standard behavior.
-- `VERCEL_PROJECT_PRODUCTION_URL` / `NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL`: canonical production URL for metadata and some callback behavior.
-- `VERCEL_SANDBOX_BASE_SNAPSHOT_ID`: optional base snapshot for fresh sandboxes. If unset, sandboxes start from Vercel's standard Sandbox runtime. Use a snapshot created in/accessible to your own Vercel scope.
-- `ELEVENLABS_API_KEY`: voice transcription.
+## Hosted Vercel mode
 
-## Deploy your own copy on Vercel
+Set both deployment-mode variables to `vercel`, choose the Vercel sandbox provider, and configure the Vercel OAuth, GitHub App, AI Gateway, and Vercel Sandbox variables from `apps/web/.env.example`.
 
-1. Fork this repo.
-2. Import the repo into Vercel. Neon Postgres is auto-provisioned if you use the deploy button above.
-3. Generate a secret for session signing:
+[Deploy to Vercel](https://vercel.com/new/clone?project-name=open-agents&repository-name=open-agents&repository-url=https%3A%2F%2Fgithub.com%2Fvercel-labs%2Fopen-agents)
 
-   ```bash
-   openssl rand -base64 32   # BETTER_AUTH_SECRET
-   ```
+Local owner bootstrap, GitHub PAT wiring, Workflow Postgres setup, and Docker sandbox creation are unused in Vercel mode.
 
-4. Add env vars in Vercel project settings:
+## Runtime behavior
 
-   ```env
-   POSTGRES_URL=
-   BETTER_AUTH_SECRET=
-   ```
-
-5. Deploy once to get a stable production URL.
-6. Create a Vercel OAuth app with callback URL:
-
-   ```text
-   https://YOUR_DOMAIN/api/auth/callback/vercel
-   ```
-
-7. Add these env vars and redeploy:
-
-   ```env
-   NEXT_PUBLIC_VERCEL_APP_CLIENT_ID=
-   VERCEL_APP_CLIENT_SECRET=
-   ```
-
-8. If you want the full GitHub-enabled coding-agent flow, create a GitHub App using:
-
-   - Homepage URL: `https://YOUR_DOMAIN`
-   - Callback URL: `https://YOUR_DOMAIN/api/auth/callback/github`
-   - Setup URL: `https://YOUR_DOMAIN/api/github/app/callback`
-
-   In the GitHub App settings:
-   - use the GitHub App's Client ID and Client Secret for `NEXT_PUBLIC_GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET`
-   - make the app public if you want org installs to work cleanly
-
-9. Add the GitHub App env vars and redeploy.
-10. Optionally add Redis/KV, `OPEN_AGENTS_RESOURCE_PROFILE=hobby` for Hobby-compatible resource defaults, the canonical production URL vars, and your own `VERCEL_SANDBOX_BASE_SNAPSHOT_ID` if you want fresh sandboxes to start from a preconfigured image.
-
-## Local setup
-
-1. Install dependencies:
-
-   ```bash
-   corepack enable
-   pnpm install
-   ```
-
-2. Create your local env file:
-
-   ```bash
-   cp apps/web/.env.example apps/web/.env
-   ```
-
-3. Fill in the required values in `apps/web/.env`.
-4. Start the app:
-
-   ```bash
-   pnpm web
-   ```
-
-If you already have a linked Vercel project, you can pull env vars locally with `vc env pull`.
-
-## OAuth and integration setup
-
-### Vercel OAuth
-
-Authentication is handled by [Better Auth](https://www.better-auth.com/) with Vercel and GitHub as social providers. All auth routes are served from the `/api/auth/[...all]` catchall.
-
-Create a Vercel OAuth app and use this callback:
-
-```text
-https://YOUR_DOMAIN/api/auth/callback/vercel
-```
-
-For local development, use:
-
-```text
-http://localhost:3000/api/auth/callback/vercel
-```
-
-Then set:
-
-```env
-NEXT_PUBLIC_VERCEL_APP_CLIENT_ID=...
-VERCEL_APP_CLIENT_SECRET=...
-```
-
-### GitHub App
-
-You do not need a separate GitHub OAuth app. Open Agents uses the GitHub App's OAuth credentials as a Better Auth social provider, plus the App's installation tokens for repo access.
-
-Create a GitHub App for installation-based repo access and configure:
-
-- Homepage URL: `https://YOUR_DOMAIN`
-- Callback URL: `https://YOUR_DOMAIN/api/auth/callback/github`
-- Setup URL: `https://YOUR_DOMAIN/api/github/app/callback`
-- make the app public if you want org installs to work cleanly
-
-For local development, use `http://localhost:3000` as the homepage URL, `http://localhost:3000/api/auth/callback/github` as the callback URL, and `http://localhost:3000/api/github/app/callback` as the setup URL.
-
-Then set:
-
-```env
-NEXT_PUBLIC_GITHUB_CLIENT_ID=...   # GitHub App Client ID
-GITHUB_CLIENT_SECRET=...           # GitHub App Client Secret
-GITHUB_APP_ID=...
-GITHUB_APP_PRIVATE_KEY=...
-NEXT_PUBLIC_GITHUB_APP_SLUG=...
-GITHUB_WEBHOOK_SECRET=...
-```
-
-`GITHUB_APP_PRIVATE_KEY` can be stored as the PEM contents with escaped newlines or as a base64-encoded PEM.
+- Chat requests start Workflow runs instead of executing the agent inline.
+- Active runs reconnect to the existing Workflow stream and can survive process restarts.
+- Sandboxes expose ports `3000`, `5173`, `4321`, and `8000`, and hibernate after inactivity.
+- Docker hibernation keeps the workspace volume; archive removes it.
+- In hosted mode, repository access follows the signed-in user and GitHub App installation. In local mode, it follows the PAT scope.
+- Auto-commit and auto-PR are optional preferences.
+- Session sharing and optional ElevenLabs voice input remain available.
 
 ## Useful commands
 
 ```bash
-pnpm web                    # run dev server
-pnpm check                  # lint + format check
-pnpm fix                    # lint + format fix
-pnpm typecheck              # typecheck all packages
-pnpm run ci                 # full CI: check, typecheck, tests, migration check
-pnpm sandbox:snapshot-base  # refresh sandbox base snapshot
+pnpm web                              # run the web/Workflow process
+pnpm --dir apps/web db:migrate:apply  # apply application migrations
+pnpm --dir apps/web workflow:setup    # initialize Workflow Postgres tables
+pnpm --dir apps/web auth:bootstrap    # create the configured local owner
+pnpm check                            # lint and format check
+pnpm fix                              # apply lint/format fixes
+pnpm typecheck                        # typecheck all packages
+pnpm run ci                           # full CI verification
 ```
 
-## Repo layout
+## Repository layout
 
 ```text
-apps/web         Next.js app, workflows, auth, chat UI
-packages/agent   agent implementation, tools, subagents, skills
-packages/sandbox sandbox abstraction and Vercel sandbox integration
-packages/shared  shared utilities
+apps/web          Next.js app, workflows, auth, persistence, and UI
+packages/agent    agent implementation and tools
+packages/sandbox  sandbox interface plus Vercel and Docker implementations
+packages/shared   shared hooks and utilities
+docker            web/sandbox images and Compose configuration
 ```

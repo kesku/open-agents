@@ -10,6 +10,7 @@ import {
   globalSkillRefsSchema,
   type GlobalSkillRef,
 } from "@/lib/skills/global-skill-refs";
+import { getConfiguredSandboxProvider } from "@/lib/sandbox/provider";
 
 interface UpdatePreferencesRequest {
   defaultModelId?: string;
@@ -55,10 +56,9 @@ export async function PATCH(req: Request) {
   const updates: UpdatePreferencesRequest = {};
 
   if (body.defaultSandboxType !== undefined) {
-    const validTypes = ["vercel"];
     if (
       typeof body.defaultSandboxType !== "string" ||
-      !validTypes.includes(body.defaultSandboxType)
+      body.defaultSandboxType !== getConfiguredSandboxProvider()
     ) {
       return Response.json({ error: "Invalid sandbox type" }, { status: 400 });
     }

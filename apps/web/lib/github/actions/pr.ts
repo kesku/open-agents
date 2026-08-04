@@ -17,7 +17,10 @@ import {
 } from "@/lib/github/access";
 import { withScopedInstallationOctokit } from "@/lib/github/app";
 import { getGitHubAppUserToken, getUserGitHubToken } from "@/lib/github/token";
-import { generatePullRequestContentFromSandbox } from "@/lib/github/pr-content";
+import {
+  generatePullRequestContentFromSandbox,
+  resolvePullRequestAppBaseUrl,
+} from "@/lib/github/pr-content";
 import { getSessionById, updateSession } from "@/lib/db/sessions";
 import { isSandboxActive } from "@/lib/sandbox/utils";
 import { getServerSession } from "@/lib/session/get-server-session";
@@ -52,13 +55,7 @@ export interface GeneratePrContentResult {
 // ---------------------------------------------------------------------------
 
 function resolveAppBaseUrl(): string | undefined {
-  const vercelUrl = process.env.VERCEL_URL;
-  if (vercelUrl) {
-    return vercelUrl.startsWith("http") ? vercelUrl : `https://${vercelUrl}`;
-  }
-  return process.env.NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL
-    ? `https://${process.env.NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL}`
-    : undefined;
+  return resolvePullRequestAppBaseUrl() ?? undefined;
 }
 
 function isMergeMethod(value: unknown): value is MergeMethod {
@@ -218,6 +215,7 @@ export async function generatePrContent(params: {
 
   const prContentResult = await generatePullRequestContentFromSandbox({
     sandbox,
+    userId: session.user.id,
     sessionId,
     sessionTitle,
     baseBranch,

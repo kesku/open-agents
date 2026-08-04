@@ -6,6 +6,7 @@ import { getGitHubUsername } from "@/lib/github/users";
 import { isManagedTemplateTrialUser } from "@/lib/managed-template-trial";
 import { sanitizeInternalRedirect } from "@/lib/redirect-safety";
 import { getServerSession } from "@/lib/session/get-server-session";
+import { isLocalDeployment } from "@/lib/deployment/mode";
 
 function parseInstallationId(value: string | null): number | null {
   if (!value) {
@@ -43,6 +44,10 @@ export async function GET(req: Request): Promise<Response> {
   const session = await getServerSession();
   if (!session?.user?.id) {
     return NextResponse.redirect(new URL("/", req.url));
+  }
+
+  if (isLocalDeployment()) {
+    return redirectAndClearCookies(new URL("/settings/connections", req.url));
   }
 
   const redirectUrl = new URL(redirectTo, req.url);

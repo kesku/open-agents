@@ -116,6 +116,33 @@ describe("normalizeLegacySandboxState", () => {
 
     expect(normalizeLegacySandboxState(state)).toEqual(state);
   });
+
+  test("normalizes legacy Docker sandbox ids without changing the provider", async () => {
+    const { normalizeLegacySandboxState } = await sessionsModulePromise;
+
+    expect(
+      normalizeLegacySandboxState({
+        type: "docker",
+        sandboxId: "session_local-1",
+        expiresAt: 789,
+      }),
+    ).toEqual({
+      type: "docker",
+      sandboxName: "session_local-1",
+      expiresAt: 789,
+    });
+  });
+
+  test("rejects unsupported sandbox providers", async () => {
+    const { normalizeLegacySandboxState } = await sessionsModulePromise;
+
+    expect(
+      normalizeLegacySandboxState({
+        type: "unknown",
+        sandboxName: "session_unknown-1",
+      }),
+    ).toBeUndefined();
+  });
 });
 
 describe("getUsedSessionTitles", () => {

@@ -21,5 +21,7 @@ export function useSession() {
     hasGitHub: data?.hasGitHub ?? false,
     hasGitHubAccount: data?.hasGitHubAccount ?? false,
     hasGitHubInstallations: data?.hasGitHubInstallations ?? false,
+    githubConnectionMode: data?.githubConnectionMode ?? null,
+    isLocalGitHub: data?.githubConnectionMode === "local-token",
   };
 }

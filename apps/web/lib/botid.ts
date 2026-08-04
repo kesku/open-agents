@@ -1,4 +1,5 @@
 import { checkBotId } from "botid/server";
+import { isLocalDeployment } from "@/lib/deployment/mode";
 
 /**
  * Shared Vercel BotID server-side configuration.
@@ -20,7 +21,7 @@ export const botIdConfig = {
 };
 
 export async function checkBotProtection() {
-  if (process.env.NODE_ENV !== "production") {
+  if (isLocalDeployment() || process.env.NODE_ENV !== "production") {
     return {
       isHuman: true,
       isBot: false,

@@ -105,6 +105,9 @@ const spies = {
       prUrl: "https://github.com/acme/repo/pull/42",
     }),
   ),
+  getModelProviderRuntimeConfigs: mock((_userId: string) =>
+    Promise.resolve(testModelProviderRuntimeConfigs),
+  ),
 };
 
 let testSessionRecord: {
@@ -154,6 +157,13 @@ let agentResponseHeaders: Record<string, string> | undefined;
 let agentResponseBody: unknown;
 let agentProviderMetadata: Record<string, unknown> | undefined;
 let agentInputMessages: unknown;
+let agentCallOptions: unknown;
+let testModelProviderRuntimeConfigs: Array<{
+  id: string;
+  name: string;
+  baseURL: string;
+  apiKey: string;
+}> = [];
 
 function buildAgentSteps() {
   return [
@@ -220,8 +230,15 @@ mock.module("./chat-post-finish", () => spies);
 mock.module("@/app/config", () => ({
   webAgent: {
     tools: {},
-    stream: async ({ messages }: { messages: unknown }) => {
+    stream: async ({
+      messages,
+      options,
+    }: {
+      messages: unknown;
+      options: unknown;
+    }) => {
       agentInputMessages = messages;
+      agentCallOptions = options;
       return {
         toUIMessageStream: (opts: {
           sendStart?: boolean;
@@ -347,6 +364,10 @@ mock.module("@/lib/db/user-preferences", () => ({
   getUserPreferences: async () => testPreferences,
 }));
 
+mock.module("@/lib/db/model-providers", () => ({
+  getModelProviderRuntimeConfigs: spies.getModelProviderRuntimeConfigs,
+}));
+
 mock.module("./chat-sandbox-runtime", () => ({
   resolveChatSandboxRuntime: spies.resolveChatSandboxRuntime,
 }));
@@ -403,6 +424,8 @@ beforeEach(() => {
   agentResponseBody = undefined;
   agentProviderMetadata = undefined;
   agentInputMessages = undefined;
+  agentCallOptions = undefined;
+  testModelProviderRuntimeConfigs = [];
   streamOnFinishCallback = undefined;
   testSessionRecord = {
     id: "session-1",
@@ -492,6 +515,33 @@ describe("runAgentWorkflow", () => {
     const types = writtenChunks.map((c) => c.type);
     expect(types[0]).toBe("start");
     expect(types[types.length - 1]).toBe("finish");
+  });
+
+  test("loads provider credentials inside the agent step", async () => {
+    testModelProviderRuntimeConfigs = [
+      {
+        id: "openrouter",
+        name: "OpenRouter",
+        baseURL: "https://openrouter.ai/api/v1",
+        apiKey: "secret-provider-key",
+      },
+    ];
+
+    const workflowOptions = makeOptions();
+    expect(JSON.stringify(workflowOptions)).not.toContain(
+      "secret-provider-key",
+    );
+
+    await runAgentWorkflow(workflowOptions);
+
+    expect(spies.getModelProviderRuntimeConfigs).toHaveBeenCalledWith("user-1");
+    expect(agentCallOptions).toMatchObject({
+      openAICompatibleProviders: testModelProviderRuntimeConfigs,
+    });
+
+    const persistedCalls = spies.persistAssistantMessage.mock
+      .calls as unknown[][];
+    expect(JSON.stringify(persistedCalls)).not.toContain("secret-provider-key");
   });
 
   test("does not stream transient workspace setup status from runtime prep", async () => {

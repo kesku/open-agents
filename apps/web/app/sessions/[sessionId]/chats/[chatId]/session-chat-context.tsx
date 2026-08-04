@@ -40,12 +40,13 @@ import {
   hasPausedSandboxState,
   hasRuntimeSandboxState as hasRuntimeSandboxStateValue,
 } from "@/lib/sandbox/utils";
+import { getConfiguredSandboxProvider } from "@/lib/sandbox/provider";
 import {
   type RetryChatStreamOptions,
   useSessionChatRuntime,
 } from "./hooks/use-session-chat-runtime";
 
-const KNOWN_SANDBOX_TYPES = ["vercel"] as const;
+const KNOWN_SANDBOX_TYPES = ["docker", "vercel"] as const;
 type KnownSandboxType = (typeof KNOWN_SANDBOX_TYPES)[number];
 
 function asKnownSandboxType(value: unknown): KnownSandboxType | null {
@@ -767,13 +768,14 @@ export function SessionChatProvider({
   }, []);
 
   const preferredSandboxType =
-    asKnownSandboxType(sessionRecord.sandboxState?.type) ?? "vercel";
+    asKnownSandboxType(sessionRecord.sandboxState?.type) ??
+    getConfiguredSandboxProvider();
   const supportsDiff =
     sessionRecord.sandboxState?.type === undefined ||
-    sessionRecord.sandboxState.type === "vercel";
+    asKnownSandboxType(sessionRecord.sandboxState.type) !== null;
   const supportsRepoCreation =
     sessionRecord.sandboxState?.type === undefined ||
-    sessionRecord.sandboxState.type === "vercel";
+    asKnownSandboxType(sessionRecord.sandboxState.type) !== null;
   const hasRuntimeSandboxState = hasRuntimeSandboxStateValue(
     sessionRecord.sandboxState,
   );

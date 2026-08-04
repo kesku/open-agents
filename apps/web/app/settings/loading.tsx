@@ -1,11 +1,14 @@
 import { AccountsSectionSkeleton } from "./accounts-section";
 import { LeaderboardSectionSkeleton } from "./leaderboard-section";
 import { ModelVariantsSectionSkeleton } from "./model-variants-section";
+import { ModelProvidersSectionSkeleton } from "./model-providers-section";
 import {
   ModelPreferencesSectionSkeleton,
   PreferencesSectionSkeleton,
 } from "./preferences-section";
 import { VercelSectionSkeleton } from "./vercel-section";
+import { isLocalDeployment } from "@/lib/deployment/mode";
+import { isDirectModelProvidersEnabled } from "@/lib/model-provider-access";
 
 function ProfilePageLoading() {
   return (
@@ -52,7 +55,7 @@ function ConnectionsPageLoading() {
   return (
     <>
       <h1 className="text-2xl font-semibold">Connections</h1>
-      <VercelSectionSkeleton />
+      {!isLocalDeployment() ? <VercelSectionSkeleton /> : null}
       <AccountsSectionSkeleton />
     </>
   );
@@ -73,6 +76,8 @@ function PreferencesPageLoading() {
 }
 
 function ModelsPageLoading() {
+  const directModelProvidersEnabled = isDirectModelProvidersEnabled();
+
   return (
     <div className="space-y-8">
       <div className="space-y-1">
@@ -84,6 +89,12 @@ function ModelsPageLoading() {
       </div>
       <ModelPreferencesSectionSkeleton />
       <div className="border-t border-border/50" />
+      {directModelProvidersEnabled ? (
+        <>
+          <ModelProvidersSectionSkeleton />
+          <div className="border-t border-border/50" />
+        </>
+      ) : null}
       <ModelVariantsSectionSkeleton />
     </div>
   );
